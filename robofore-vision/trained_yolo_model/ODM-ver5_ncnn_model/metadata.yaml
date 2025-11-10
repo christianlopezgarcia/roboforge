@@ -1,0 +1,21 @@
+description: Ultralytics ODM-ver5 model trained on /content/yolo_data/data.yaml
+author: Ultralytics
+date: '2025-11-09T17:22:50.594949'
+version: 8.3.207
+license: AGPL-3.0 License (https://ultralytics.com/license)
+docs: https://docs.ultralytics.com
+stride: 32
+task: detect
+batch: 1
+imgsz:
+- 640
+- 640
+names:
+  0: red
+  1: green
+  2: blue
+  3: yellow
+args:
+  batch: 1
+  half: false
+channels: 3
