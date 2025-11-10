@@ -31,7 +31,7 @@ if len(sys.argv) == 1:
     args = parser.parse_args([
         # '--model', '/home/clopezgarcia2/Desktop/roboforge/robofore-vision/trained_yolo_model/off_the_shelf/yolo11n_ncnn_model',
         '--model', '/home/clopezgarcia2/Desktop/roboforge/robofore-vision/trained_yolo_model/ODM-ver5_ncnn_model',
-        '--source', 'usb0',
+        '--source', 'usb2',
         '--thresh', '0.5',
         '--resolution', '1280x720'
     ])
@@ -257,8 +257,8 @@ while True:
 print(f'Average pipeline FPS: {avg_frame_rate:.2f}')
 if source_type == 'video' or source_type == 'usb':
     cap.release()
-elif source_type == 'picamera':
-    cap.stop()
+# elif source_type == 'picamera':
+#     cap.stop()
 if record: recorder.release()
 cv2.destroyAllWindows()
 
