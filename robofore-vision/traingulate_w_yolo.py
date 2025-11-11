@@ -8,7 +8,7 @@ from ultralytics import YOLO
 # ===============================
 LEFT_CAM_ID = 0
 RIGHT_CAM_ID = 2
-BASELINE = 0.06          # distance between cameras in meters
+BASELINE = 0.05          # distance between cameras in meters
 FOCAL_LENGTH_PX = 700    # focal length in pixels
 CONF_THRESH = 0.5
 MODEL_PATH = '/home/clopezgarcia2/Desktop/roboforge/robofore-vision/trained_yolo_model/ODM-ver5_ncnn_model'
