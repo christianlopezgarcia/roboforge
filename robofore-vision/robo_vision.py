@@ -31,7 +31,7 @@ if len(sys.argv) == 1:
     args = parser.parse_args([
         # '--model', '/home/clopezgarcia2/Desktop/roboforge/robofore-vision/trained_yolo_model/off_the_shelf/yolo11n_ncnn_model',
         '--model', '/home/clopezgarcia2/Desktop/roboforge/robofore-vision/trained_yolo_model/ODM-ver5_ncnn_model',
-        '--source', 'usb2',
+        '--source', 'usb0',
         '--thresh', '0.5',
         '--resolution', '1280x720'
     ])
