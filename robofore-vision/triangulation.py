@@ -36,10 +36,10 @@ def run():
         right_camera_source = 0
         pixel_width = 640
         pixel_height = 480
-        angle_width = 78
-        angle_height = 64 # 63
+        angle_width = 70 #78
+        angle_height = 52 #64 # 63
         frame_rate = 20
-        camera_separation = 5 + 15/16
+        camera_separation = 5.75 # 2.36 inches ==6 cm 
 
         # left camera 1
         ct1 = tt.Camera_Thread()
