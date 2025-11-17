@@ -2,7 +2,7 @@
 
 import time
 
-from robofore_vision.triangulate_w_yolo import (
+from roboforge_vision.triangulate_w_yolo import (
     start_thread,
     stop_thread,
     GLOBAL_TARGET_INFO,

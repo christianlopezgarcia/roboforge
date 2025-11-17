@@ -31,7 +31,7 @@ RIGHT_CAM_ID = 2
 BASELINE = 0.051                # meters (5.1 cm baseline)
 FOCAL_LENGTH_PX = 422        #  422 -cal 457 - exp
 CONF_THRESH = 0.5
-MODEL_PATH = '/home/clopezgarcia2/Desktop/roboforge/robofore-vision/trained_yolo_model/ODM-ver5_ncnn_model'
+MODEL_PATH = '/home/clopezgarcia2/Desktop/roboforge/roboforge_vision/trained_yolo_model/ODM-ver5_ncnn_model'
 RESOLUTION = (640, 480)         # (width, height)
 CAMERA_FRAME_RATE = 20
 CAMERA_FOURCC = cv2.VideoWriter_fourcc(*"MJPG")
@@ -391,6 +391,40 @@ def run():
         except: pass
         cv2.destroyAllWindows()
         print('DONE')
+
+
+# ------------------------------
+# THREAD SUPPORT FOR MAIN PROGRAM
+# ------------------------------
+
+import threading
+
+STEREO_THREAD = None
+STOP_FLAG = False
+
+def start_thread():
+    """Starts run() inside a daemon thread so main.py can use it."""
+    global STEREO_THREAD, STOP_FLAG
+    if STEREO_THREAD is not None and STEREO_THREAD.is_alive():
+        print("[Stereo] Already running.")
+        return
+
+    STOP_FLAG = False
+
+    def runner():
+        run()  # your original run() loops until STOP_FLAG or 'q'
+
+    STEREO_THREAD = threading.Thread(target=runner, daemon=True)
+    STEREO_THREAD.start()
+    print("[Stereo] Started thread.")
+
+
+def stop_thread():
+    """Signals run() to exit cleanly."""
+    global STOP_FLAG
+    STOP_FLAG = True
+    print("[Stereo] Stop requested.")
+
 
 if __name__ == '__main__':
     run()
