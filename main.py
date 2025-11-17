@@ -1,8 +1,8 @@
 # main.py
 
 import time
-
-from roboforge_vision.triangulate_w_yolo import (
+# /home/clopezgarcia2/Desktop/roboforge/roboforge_vision/traingulate_w_yolo.py
+from roboforge_vision.traingulate_w_yolo import (
     start_thread,
     stop_thread,
     GLOBAL_TARGET_INFO,
