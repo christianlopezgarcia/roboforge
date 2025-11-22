@@ -8,38 +8,38 @@
 # sudo apt-get install python3-pigpio
 # sudo systemctl enable pigpiod -- for boot. did not work for me.
 # remore GPIO to access from venv -- 
-
+import threading 
 from gpiozero import DistanceSensor
 from gpiozero.pins.pigpio import PiGPIOFactory
 import time
 
-GLOBAL_ULTRASONIC_INFO = {}
-ULTRASONIC_INFO_LOCK = threading.lock()
-
+GLOBAL_ULTRASONIC_INFO = {} 
+ULTRASONIC_INFO_LOCK = threading.Lock()
 
 def Ultrasonic(RPI_IP_ADD, sample_rate, echo_pin, trigger_pin):
         
          # Declare globals here, inside the function, for modification access
-        global GLOBAL_TARGET_INFO
-        global TARGET_INFO_LOCK
-        global LAST_FRAME_STITCHED
-        global LAST_FRAME_LOCK
+        global GLOBAL_ULTRASONIC_INFO
+        global ULTRASONIC_INFO_LOCK
+        # global LAST_FRAME_STITCHED
+        # global LAST_FRAME_LOCK
         global ping_dist
         global last_time
-
-# host=RPI_IP_ADD 
+    # host=RPI_IP_ADD
+        last_time= time.time()                       # timestamp
+        RPI_IP_ADD = 0
         factory = PiGPIOFactory()      # gpio access lib -- set up required for pigpio. -- sudo pigpiod
-        last_time = time.time()                       # timestamp
         period = 1/sample_rate                        # time btn publishing samples
-
         sensor = DistanceSensor(echo_pin, trigger_pin, pin_factory=factory)
-        while True:
+        while True:                
             if(time.time() - last_time >= period):
-
                 ping_dist = sensor.distance * 100  #cm
                 last_time = time.time()
-                with TARGET_INFO_LOCK
-                    GLOBAL_TARGET_INFO = {'US_distance_cm': ping_dist, 'ts': last_time}
+
+                with ULTRASONIC_INFO_LOCK:        
+                    GLOBAL_ULTRASONIC_INFO = {'US_distance_cm': ping_dist, 'ts': last_time}
+                
+                # return ping_dist
                 print(f"Ultrasonic distance: {ping_dist}")
     
 
@@ -57,8 +57,8 @@ def start_thread():
         return
     STOP_FLAG = False
 
-    def runner():
-        Ultrasonic()  # your original Ultrasonic() loops until STOP_FLAG or 'q'
+    def runner(IP, sample_rate, echo_pin, trigger_pin):
+        Ultrasonic(IP, sample_rate, echo_pin, trigger_pin)  # your original Ultrasonic() loops until STOP_FLAG or 'q'
 
     ULTRASONIC_THREAD = threading.Thread(target=runner, daemon=True)
     ULTRASONIC_THREAD.start()
@@ -74,7 +74,7 @@ def stop_thread():
 
 if __name__ == '__main__':
     IP = '10.0.0.12'
-    sample_rate =10
+    sample_rate = 10 
     echo_pin = 17
     trigger_pin = 27
     Ultrasonic(IP, sample_rate, echo_pin, trigger_pin)
