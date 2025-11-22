@@ -13,42 +13,28 @@ from gpiozero import DistanceSensor
 from gpiozero.pins.pigpio import PiGPIOFactory
 import time
 
-class Ultrasonic:   
-    def __init__(self, RPI_IP_ADD, trigger_pin, echo_pin, sample_rate = 10)
+
+def Ultrasonic(RPI_IP_ADD, sample_rate, echo_pin, trigger_pin):
         
-        # self,RPI_IP_ADD = '10.0.0.53' # T- hostname?
-        self.running = False
-        self.thread = None
-        
-        self.factory = PiGPIOFactory(host=RPI_IP_ADD)      # gpio access lib -- set up required for pigpio. -- sudo pigpiod
+         # Declare globals here, inside the function, for modification access
+        global GLOBAL_TARGET_INFO
+        global TARGET_INFO_LOCK
+        global LAST_FRAME_STITCHED
+        global LAST_FRAME_LOCK
+
+        factory = PiGPIOFactory(host=RPI_IP_ADD)      # gpio access lib -- set up required for pigpio. -- sudo pigpiod
         last_time = time.time()                       # timestamp
         period = 1/sample_rate                        # time btn publishing samples
 
-        self.sensor = DistanceSensor(echo_pin=17, triggtrigger_piner=27, pin_factory=self.factory)
+        sensor = DistanceSensor(echo_pin=17, trigger_piner=27, pin_factory=factory)
         while True:
             if(time.time() > last_time):
-                
+
                 self.ping_dist = self.sensor.distance * 100  #cm
                 last_time = time.time()
 
+    
 
-
-
-    def start(self):
-        self.running = True
-        self.thread = threading.Thread(target=self._update, daemon=True)
-        self.thread.start()
-        
-    def _update(self):
-        while self.running:
-            ret, frame = self.cap.read()
-            if not ret: continue
-            if not self.buffer.empty():
-                try: self.buffer.get_nowait()
-                except queue.Empty: pass
-            self.buffer.put(frame)
-
-    def run():
 
 
 
