@@ -1,596 +1,409 @@
-#Class Structure for robot arm
+#!/usr/bin/env python3
+"""
+Robot arm controller - Hybrid Servo Control
+- Uses adafruit_motor.servo for smooth movement on specified joints (Base/Shoulder).
+- Uses ServoKit for instantaneous movement on other joints (Elbow/Wrist/Hand).
+- Keeps joint & DH helpers present for forward kinematics (get_x_y_z)
+- Stores named poses and exposes manual APIs including set_all(dict) and add_angle(name, delta)
+"""
+
 import time
 import board
+import numpy as np
 import busio
 from adafruit_pca9685 import PCA9685
 from adafruit_motor import servo
 from adafruit_servokit import ServoKit
-## Join class for DH table to determine current position
-import numpy as np
 
+# ------------------------------------------------------------
+# Joint / DH helpers (kept as requested)
+# ------------------------------------------------------------
 class joint:
-    
     def __init__(self, theta, d, alpha, a):
+        # Store in degrees for theta/alpha for readability (we convert inside A_i)
         self.theta = theta
         self.alpha = alpha
         self.a = a
         self.d = d
-    
+
     def A(self):
         return A_i(self.theta, self.alpha, self.a, self.d)
 
     def add_angle(self, theta = 0):
+        """Mutate theta (kept for compatibility). Prefer creating copies for FK."""
         self.theta = self.theta + theta
+        return self
 
-## ----------------------------------------------------------------------
-# Basic functions for xarm
-
-# Compute the A matrix for a single joint
 def A_i(th_i, alpha_i, a_i, d_i):
-
-    # np uses radians 
-    th_i = np.deg2rad(th_i)
-    alpha_i = np.deg2rad(alpha_i)
-
-    #Create A matrix for 
-    A = np.array([[np.cos(th_i), -np.sin(th_i)*np.cos(alpha_i), np.sin(th_i)*np.sin(alpha_i), a_i*np.cos(th_i)],
-              [np.sin(th_i), np.cos(th_i)*np.cos(alpha_i), -np.cos(th_i)*np.sin(alpha_i), a_i*np.sin(th_i)], 
-              [0, np.sin(alpha_i), np.cos(alpha_i), d_i],
-              [0,0,0,1]])
+    """Compute transformation matrix for a single DH row (angles in degrees)."""
+    th_r = np.deg2rad(th_i)
+    alpha_r = np.deg2rad(alpha_i)
+    A = np.array([
+        [np.cos(th_r), -np.sin(th_r)*np.cos(alpha_r),  np.sin(th_r)*np.sin(alpha_r), a_i*np.cos(th_r)],
+        [np.sin(th_r),  np.cos(th_r)*np.cos(alpha_r), -np.cos(th_r)*np.sin(alpha_r), a_i*np.sin(th_r)],
+        [0,             np.sin(alpha_r),              np.cos(alpha_r),              d_i],
+        [0,             0,                            0,                            1]
+    ])
     return A
 
-# Multiply 6 joints Transform matricies together for the forward kinematics -- gives the matrix defining the 
-#   Transformation from the end effector to the base frame -- should be in cartesian coordinates?
-def multiply_all(joints):
-    length = len(joints)
-    # use np matmul to multiply all matricies one by one A1 * A2 * A3 * A4 * A5 * A6
-    T = joints[0].A()
-    for i in range(1,length):
-        T = np.matmul(T,joints[i].A())
-    
-    
+def multiply_all(joints_list):
+    """Multiply A matrices of each joint in order A1 * A2 * ..."""
+    if not joints_list:
+        return np.eye(4)
+    T = joints_list[0].A()
+    for j in joints_list[1:]:
+        T = np.matmul(T, j.A())
     return T
 
-# grabs the last column of a matrix for extracting the cartesian coordinates, assuming the end effector is 
-#   the final coordinate frame
-#       Otherwise an offset computation is needed
-def get_carte(A):
-    cart = A[0:3,3]
-    return cart
+def get_carte(T):
+    """Return the x,y,z translation vector from a homogenous transform"""
+    return T[0:3, 3]
 
+# ------------------------------------------------------------
+# Servo & Pose Controller
+# ------------------------------------------------------------
 
-class robo_arm:
-    
-    
+# Servo channel mapping (names -> PCA channel numbers)
+SERVO_CHANNELS = {
+    "base": 6,
+    "shoulder": 5,
+    "elbow": 4,
+    "wrist": 3,
+    "hand": 1
+}
+
+# Startup / default angles for the named servos (degrees)
+STARTUP_POSE = {
+    "base": 90,
+    "shoulder": 180,
+    "elbow": 0,
+    "wrist": 0,
+    "hand": 180
+}
+
+# Movement tuning
+MIN_PULSE = 500
+MAX_PULSE = 2500
+SMOOTH_STEP = 2         # degrees per step for smooth servos
+SMOOTH_DELAY = 0.05     # seconds between smooth steps (Adjusted slightly lower from 0.055)
+
+# Which servos should use the custom smooth movement (high-torque / big / metal gear)
+SMOOTH_SERVOS = {"shoulder", "base"} 
+SMOOTH_CHANNELS = {SERVO_CHANNELS[name] for name in SMOOTH_SERVOS} # Channels of smooth servos
+
+class RobotArm:
     def __init__(self):
-        # red cube vs blue cube vs green cube?
-        # boolean for each? so we only pick up one of each. 
-        # -----------------------------
-        # Joint setup -- angles at Zero -- true angles. not full 180 degree range on servos -- means there is some mapping...
-        # -----------------------------
-        # this performs the lateral move to under the base servo
-        self.ping2base_j = joint(180, 0, 0, 45)
+        # Initialize I2C and PCA9685
+        try:
+            self.i2c = busio.I2C(board.SCL, board.SDA)
+            self.pca = PCA9685(self.i2c)
+            self.pca.frequency = 50
+        except Exception as e:
+            print(f"Error initializing I2C/PCA9685: {e}")
+            raise
 
-        self.base2shoulder_j = joint(-90  , 0 ,  0 , 70) # rotate back up - forward - and extend to the shoulder servo pivot
-        # from shoulder to the elbow  -- rotate back or CCW -> positive -- then out 65mm to the elbow pivot
-        #   --shoulder servo angled backward to angle zero -- not quite 90, maybe 85?
-        self.shoulder2elbow_j = joint(90, 0   , 0 , 65)
-        # from the elbow to the wrist
-        #   --elbow servo angle set to zero -- measured 57 degrees CCW
-        self.elbow2wrist_j = joint(57, 0   , 0 , 65)
-        #from wrist to grabber
-        #   --wrist angle set to zero, measured 64 degrees CW
-        self.wrist2effector_j = joint(-64, 0, 0  , 90)
+        # Initialize ServoKit for all channels (used by non-smooth joints)
+        self.kit = ServoKit(channels=16, i2c=self.i2c, frequency=50)
 
+        # Initialize adafruit_motor.servo objects for custom smooth movement
+        self.smooth_servo_objects = {}
         
-        # -----------------------------
-        # PCA9685 setup
-        # -----------------------------
-        i2c = busio.I2C(board.SCL, board.SDA)
-        self.pca = PCA9685(i2c)
-        self.pca.frequency = 50  # standard servo frequency
-        # kit = ServoKit(channels=16)  # For standard small servos
+        # Pose storage + current tracking
+        self.poses = {}
+        self.current_angles = {}    # current known/last-set angles
 
-        large_servos = [7]          # high-torque / metal gear
-        small_servos = [13, 14, 15] # standard hobby/RC servos
-
-        self.kit = ServoKit(channels=16)
-        super().__init__() # something along these lines
-
-       
-      
-        # Stops the update --not sure if this will work -- 11/17 unused
-        self.stop = False 
-
-        self.servo_angles_default = {
-            "base" : 90,
-            "shoulder" : 180, # servo 5
-            "elbow" : 0,  # servo
-            "wrist" : 0,   # servo 
-            "hand" : 180
-        }
-
-        # looks down towards ground at 45 degrees
-        self.servo_angles_45down = {
-            "base" : 0,  # -- check this
-            "shoulder" : 90, # servo 5 -- check this  maybe slightly back from 90
-            "elbow" : 180,  # servo
-            "wrist" : 0,   # servo 
-            "hand" : 180
+        # Safety limits (min, max) per joint — edit to match your hardware's mechanical limits
+        self.limits = {
+            "base":      (0, 180),
+            "shoulder":  (20, 170),
+            "elbow":     (0, 180),
+            "wrist":     (0, 180),
+            "hand":      (0, 180)
         }
         
-        self.servo_angles_safe = {
-            "base" : 0,  # -- check this
-            "shoulder" : 180, # servo 5 -- check this  maybe slightly back from 90
-            "elbow" : 0,  # servo
-            "wrist" : 180,   # servo 
-            "hand" : 180
-        }
-
-        ## -------- Angles mostly for Calibration ------------------
-        self.servo_angles_straight_up = {
-            "base" : 0, 
-            "shoulder" : 90, 
-            "elbow" : 90,  # servo
-            "wrist" : 90,   # servo 
-            "hand" : 90
-        }
-
-        self.servo_angles_reach_forward = {
-            "base" : 180, 
-            "shoulder" : 180, # servo 5
-            "elbow" : 85,  # servo
-            "wrist" : 90,   # servo 
-            "hand" : 180
-        }
-
-        self.servo_angles_elbow_l = {
-            "base" : 0, 
-            "shoulder" : 90, 
-            "elbow" : 180,  # servo
-            "wrist" : 90,   # servo 
-            "hand" : 180
-        }
-        self.servo_angles_wrist_l = {
-            "base" : 0, 
-            "shoulder" : 90, 
-            "elbow" : 90,  # servo
-            "wrist" : 0,   # servo 
-            "hand" : 180
-        }
-        ## ^^^^^^^^^^^^^^^ Angles mostly for Calibratio ^^^^^^^^^^^
-
-
-        #set current angles to default
-        self.current_servo_angles = self.servo_angles_default
-
-        self.next_servo_angles = self.servo_angles_default
-        #set default angles
-        # self.servo_angles = {
-        #     "base" : 90,
-        #     "shoulder" : 0,
-        #     "elbow" : 135,
-        #     "wrist" : 90,
-        #     "hand" : 180
-        # }
-
-        # self.servo_list = [wrist]
-        self.servo_channel = {
-        "base" : 6,
-        "shoulder" : 5, # Servo 5
-        "elbow" : 4,    # Servo 4
-        "wrist" : 3,    # Servo 3
-        "hand" : 1      # Servo 1
-        }
-
-        self.large_servo_objects = {}
-        print("\n ---- INIT -----")
-        for servo_joint in self.servo_angles_default:
-
-            try:
-                
-                ch = self.servo_channel[servo_joint]
-                
-                if(servo_joint == "shoulder"):
-                    #we are a t big servo -- do it difff
-                    s = servo.Servo(self.pca.channels[ch], min_pulse=500, max_pulse=2500)
-                    self.large_servo_objects[ch] = s
-                    s.angle = self.servo_angles_default["shoulder"]
-                    print(f"servo_joint: {servo_joint}, ch: {ch}, angle: {s.angle}")
-
-                    time.sleep(0.05)
-                    time.sleep(1)
-                else:
-                    # print(ch)
-                    self.kit.servo[ch].angle = self.servo_angles_default[servo_joint] 
-                    # Debugging
-                    # print("set channel to :")
-                    # print(self.kit.servo[ch].angle)
-
-                    print(f"servo_joint: {servo_joint}, ch: {ch}, angle: {self.kit.servo[ch].angle}")
-            except Exception:
-                print("failed to update channel: "+ ch)
-                pass
-
-        # servo0 = adafruit_motor.servo.Servo(self.servo_channel["elbow"])
-        print("\n\n")    
-    # END OF INIT
-
-    def teardown(self):
-        """Instead of stopping the PCA9685, save duty cycles."""
-        self.saved_duty = []
-
-        for i in range(16):
-            try:
-                dc = self.pca.channels[i].duty_cycle
-                self.saved_duty.append(dc)
-                self.pca.channels[i].duty_cycle = 0  # stop servo motion
-            except:
-                self.saved_duty.append(None)
-
-
-
-    def move_to(self, servo_obj, current, target, step=2, delay=0.02):
-        """
-        Gradually move a large servo to the target angle
-        """
-        target = max(0, min(180, int(round(target))))
-        if target == current:
-            return current
-
-        step = max(1, int(abs(step)))
-
-        if target > current:
-            angle = current
-            while angle < target:
-                angle = min(angle + step, target)
-                servo_obj.angle = angle
-                time.sleep(delay)
-        else:
-            angle = current
-            while angle > target:
-                angle = max(angle - step, target)
-                servo_obj.angle = angle
-                time.sleep(delay)
-
-        return target  # updated current angle 
-    # # define new servo angle -- by keyword atm 
-    # def set_angle(self, **servos):    
-        
-    #     for servo, angle in servos.items():
-    
-    #         try:
-    #             ch = self.servo_channel[servo]
-    #             print(ch)
-    #             #Save the angle in object dict
-    #             self.servo_angles[servo] = angle
-    #             #Update that servo to be the angle
-    #             kit.servo[ch].angle = self.servo_angles[angle]
-    #         except Exception:
-    #             pass
-    
-    # simple update for the angles we changed
-    def update(self, delay = 0.5):
-        #optional delay
-        time.sleep(delay)
-
-        #iterate through servos and update the channel
-        for servo_joint in self.current_servo_angles:
-            ch = self.servo_channel[servo_joint]
-            # print("update channgel: ")
-            # print(ch)
-            # try:
-            if(self.stop == False):
-                    
-                    #Mr christian code rapper // or "elbow"
-                
-                if(servo_joint == "shoulder"):
-                    # TODO fix reduncadncy
-                    s = self.large_servo_objects[ch]
-                    current_angle = self.current_servo_angles[servo_joint]  
-                    next_angle = self.next_servo_angles[servo_joint]
-
-                    current_angle = self.move_to(s, current_angle, next_angle)
-                    self.current_servo_angles[servo_joint] = current_angle
-                    print(f"servo_joint: {servo_joint}, ch: {ch}, angle: {s.angle}")
-                    
-                    # time.sleep(delay) # a bit extra in there for large servo
-                #Standard servos
-                else:
-                    ch = self.servo_channel[servo_joint]
-                    self.kit.servo[ch].angle = self.next_servo_angles[servo_joint]  
-                    self.current_servo_angles[servo_joint] = self.next_servo_angles[servo_joint]
-                    # Debugging
-                    # print("set channel to :")
-                    # print(ch)
-                    print(f"servo_joint: {servo_joint}, ch: {ch}, angle: {self.kit.servo[ch].angle}")
-            else:
-                break
+        # Setup servos
+        for name, ch in SERVO_CHANNELS.items():
+            start_angle = int(STARTUP_POSE.get(name, 90))
+            safe_start = self.clamp_angle(name, start_angle)
             
-            # except Exception:
-                print("exception thrown in update")
-                print(servo_joint)
-                pass
-        print("Robo-Arm Angle Update Complete")
+            # 1. Setup PWM pulse range for ALL channels via ServoKit
+            # This is done on the ServoKit object, even if we use adafruit_motor for control
+            self.kit.servo[ch].set_pulse_width_range(MIN_PULSE, MAX_PULSE)
 
-    # actual values from servo channel
-    def get_servo_angles(self):
+            if ch in SMOOTH_CHANNELS:
+                # 2a. Create adafruit_motor.servo object for smooth joints
+                s = servo.Servo(self.pca.channels[ch], min_pulse=MIN_PULSE, max_pulse=MAX_PULSE)
+                self.smooth_servo_objects[name] = s
+                # Set initial angle using adafruit_motor
+                s.angle = safe_start
+            else:
+                # 2b. Set initial angle using ServoKit for non-smooth joints
+                self.kit.servo[ch].angle = safe_start
+            
+            self.current_angles[name] = safe_start
+            time.sleep(0.02) # Small delay for stability
 
-        return [self.kit.servo[self.servo_channel["base"]].angle, 
-                self.large_servo_objects[7].angle, 
-                self.kit.servo[self.servo_channel["elbow"]].angle,
-                self.kit.servo[self.servo_channel["wrist"]].angle,
-                self.kit.servo[self.servo_channel["hand"]].angle]
+        # Keep the DH base "templates" (nominal DH joint definitions)
+        self.ping2base_j       = joint(180,  0,    0, 45)
+        self.base2shoulder_j   = joint(-90,  0,    0, 70)
+        self.shoulder2elbow_j  = joint(90,   0,    0, 65)
+        self.elbow2wrist_j     = joint(57,   0,    0, 65)
+        self.wrist2effector_j  = joint(-64,  0,    0, 90)
 
-    def get_x_y(self):
-        ''' 
-            Use the DH table joints and Add angle -- always theta -- to compute the current x/y coordinatae for the end effector --
-                -- rather, where the end effector will CLOSE
+        # Add default poses
+        self.add_pose("default", **STARTUP_POSE)
+        self.add_pose("45_down", base=0, shoulder=90, elbow=180, wrist=0, hand=180)
+        self.add_pose("safe", base=0, shoulder=180, elbow=0, wrist=180, hand=180)
+        self.add_pose("straight_up", base=0, shoulder=90, elbow=90, wrist=90, hand=90)
+        self.add_pose("reach_forward", base=90, shoulder=180, elbow=85, wrist=90, hand=180)
+        self.add_pose("elbow_L", base=0, shoulder=90, elbow=180, wrist=90, hand=180)
+        self.add_pose("wrist_L", base=0, shoulder=90, elbow=90, wrist=0, hand=180)
 
-            -   some calibration may be necessary
-            -   
+        print("RobotArm ready. Hybrid control active. Startup pose applied.")
+    
+    # ---------------------
+    # Safety helpers
+    # ---------------------
+    def clamp_angle(self, name, angle):
+        """Clamp angle to the joint's safety limits and return int."""
+        if name not in self.limits:
+            # if no limits defined, fallback to 0-180
+            mn, mx = 0, 180
+        else:
+            mn, mx = self.limits[name]
+        return int(max(mn, min(mx, int(round(angle)))))
+    
+    # ---------------------
+    # Movement helpers
+    # ---------------------
+
+    def _move_smooth_custom(self, name, target, step=SMOOTH_STEP, delay=SMOOTH_DELAY):
+        """
+        Move a servo smoothly using the custom adafruit_motor.servo object.
+        This function implements the working sweep logic from the user's demo.
+        """
+        target = self.clamp_angle(name, target)
+        current = self.current_angles.get(name)
+        s = self.smooth_servo_objects[name]
+        print(s.__dict__)
+        if target == current:
+            return
+
+        direction = 1 if target > current else -1
+
+        # Iterate in steps, clamping each step
+        for a in range(current, target + direction, direction * step):
+            print(a)
+            s.angle = a
+            self.current_angles[name] = a
+            time.sleep(delay)
+
+        # Final assignment to ensure target is reached (clamped)
+        final_target = self.clamp_angle(name, target)
+        s.angle = final_target
+        self.current_angles[name] = final_target
 
 
-            shoulder -- 90 is straight up: Add 0 degrees to theta. 180 is forward: add -90 to theta. 0 is back: +90 to theta
-                        servo: 0   -> joint 
+    def _set_angle_instantly(self, name, angle):
+        """Set servo to angle immediately (with clamp) using ServoKit."""
+        a = self.clamp_angle(name, angle)
+        ch = SERVO_CHANNELS[name]
+        self.kit.servo[ch].angle = a
+        self.current_angles[name] = a
 
-                        servo maps + 90 degrees in theta, and extends ~65mm
-            elbow    -- 
-        j
+    def _smooth_move(self, name, target):
+        """Move a servo smoothly if configured (custom logic); otherwise, set instantly (ServoKit)."""
+        target = self.clamp_angle(name, target)
         
-        '''
-        print("shoulder angle")
-        print(self.current_servo_angles["shoulder"])
-        # subtract because negative rotation is forward, 180 is full forward for the soulder
-        self.shoulder2elbow_j.add_angle(-self.current_servo_angles["shoulder"]) # approximate with what we've got. this one's range is decent
+        if name in SMOOTH_SERVOS:
+            # Use custom smooth movement for configured joints
+            self._move_smooth_custom(name, target)
+        else:
+            # Use instantaneous ServoKit movement for other joints
+            self._set_angle_instantly(name, target)
 
-        self.elbow2wrist_j.add_angle(-self.kit.servo[self.servo_channel["elbow"]].angle) # 
-        self.wrist2effector_j.add_angle(self.kit.servo[self.servo_channel["wrist"]].angle)
-        
-        all_joints = [self.ping2base_j, self.base2shoulder_j, self.shoulder2elbow_j, self.elbow2wrist_j, self.wrist2effector_j]
+    # ---------------------
+    # Pose management
+    # ---------------------
+    def add_pose(self, name, base=90, shoulder=90, elbow=90, wrist=90, hand=90):
+        """Save a named pose (angles will be clamped only when applied)."""
+        self.poses[name] = {
+            "base": int(base),
+            "shoulder": int(shoulder),
+            "elbow": int(elbow),
+            "wrist": int(wrist),
+            "hand": int(hand)
+        }
+        print(f"[POSE] Saved '{name}': {self.poses[name]}")
+
+    def move_to_pose(self, name):
+        """Move robot to a previously defined pose name (applies safety clamping)."""
+        if name not in self.poses:
+            raise KeyError(f"Pose '{name}' not defined")
+
+        pose = self.poses[name]
+        print(f"\n→ Moving to pose '{name}': {pose}")
+
+        # Use a sensible order: base -> shoulder -> elbow -> wrist -> hand
+        order = ["base", "shoulder", "elbow", "wrist", "hand"]
+        for joint_name in order:
+            if joint_name in pose:
+                target = pose[joint_name]
+                self._smooth_move(joint_name, target)
+                time.sleep(0.01)
+
+        print("✓ Pose reached.")
+
+    # ---------------------
+    # Manual APIs
+    # ---------------------
+    def set_joint(self, name, angle):
+        """Directly set one joint (clamped, smooth or instant depending on joint)."""
+        if name not in SERVO_CHANNELS:
+            raise KeyError(f"Unknown joint '{name}'")
+        self._smooth_move(name, angle)
+
+    def add_angle(self, name, delta):
+        """Add delta degrees to a joint (positive or negative)."""
+        if name not in SERVO_CHANNELS:
+            raise KeyError(f"Unknown joint '{name}'")
+        current = int(self.current_angles.get(name, 90))
+        target = current + int(delta)
+        self._smooth_move(name, target)
+
+    def set_all(self, pose=None, **kwargs):
+        """
+        Set multiple joints from a dictionary or kwargs.
+        Only joints included are changed. All values are clamped to safety limits.
+        """
+        commands = pose.copy() if pose else {}
+        commands.update(kwargs)
+
+        # Move in stable order; apply smoothing rules per joint
+        order = ["base", "shoulder", "elbow", "wrist", "hand"]
+        for joint_name in order:
+            if joint_name in commands:
+                try:
+                    self._smooth_move(joint_name, commands[joint_name])
+                except Exception as e:
+                    print(f"[ERROR] setting {joint_name}: {e}")
+
+    # Convenience grab/release that obey limits
+    def grab(self, strength=120):
+        """Move hand to strength (clamped)."""
+        self._smooth_move("hand", strength)
+
+    def release(self):
+        """Open hand to its safe max (clamped)."""
+        mn, mx = self.limits["hand"]
+        self._smooth_move("hand", mx)
+
+    # ---------------------
+    # Forward kinematics
+    # ---------------------
+    def get_x_y_z(self):
+        """
+        Build a temporary set of joints from the stored DH templates and the current servo angles.
+        Returns (x, y, z). Sign mapping is heuristically based on your earlier logic.
+        """
+        base_a = int(self.current_angles.get("base", 90))
+        shoulder_a = int(self.current_angles.get("shoulder", 180))
+        elbow_a = int(self.current_angles.get("elbow", 0))
+        wrist_a = int(self.current_angles.get("wrist", 0))
+
+        # Template thetas:
+        t_ping2base = self.ping2base_j.theta
+        t_base2shoulder = self.base2shoulder_j.theta
+        t_shoulder2elbow = self.shoulder2elbow_j.theta
+        t_elbow2wrist = self.elbow2wrist_j.theta
+        t_wrist2eff = self.wrist2effector_j.theta
+
+        # Apply simple mapping of servo angles -> joint thetas (calibrate later)
+        j_ping2base = joint(t_ping2base + (base_a - 90), self.ping2base_j.d, self.ping2base_j.alpha, self.ping2base_j.a)
+        j_base2shoulder = joint(t_base2shoulder, self.base2shoulder_j.d, self.base2shoulder_j.alpha, self.base2shoulder_j.a)
+        j_shoulder2elbow = joint(t_shoulder2elbow - shoulder_a, self.shoulder2elbow_j.d, self.shoulder2elbow_j.alpha, self.shoulder2elbow_j.a)
+        j_elbow2wrist = joint(t_elbow2wrist - elbow_a, self.elbow2wrist_j.d, self.elbow2wrist_j.alpha, self.elbow2wrist_j.a)
+        j_wrist2effector = joint(t_wrist2eff + wrist_a, self.wrist2effector_j.d, self.wrist2effector_j.alpha, self.wrist2effector_j.a)
+
+        all_joints = [j_ping2base, j_base2shoulder, j_shoulder2elbow, j_elbow2wrist, j_wrist2effector]
         T06 = multiply_all(all_joints)
         xyz = get_carte(T06)
-        return xyz
-        
-        # return self.servo_angles
-        #easy pose /update -- just get the order right
-    def pose(self, 
-             base = 90,
-             shoulder = 180,
-             elbow = 0,
-             wrist = 0,
-             hand = 180):
+        return tuple(xyz)
+
+    # Debug helper
+    def status(self):
+        print("Current angles:", self.current_angles)
+        try:
+            xyz = self.get_x_y_z()
+            print("FK end-effector (x,y,z):", tuple(round(i, 2) for i in xyz))
+        except Exception as e:
+            print("FK compute error:", e)
+
+    # Optional: safe shutdown / stop PWM (if needed)
+    def teardown(self):
+        try:
+            print("Disabling all PWM outputs...")
+            # For adafruit_motor.servo objects (smooth servos)
+            for s in self.smooth_servo_objects.values():
+                s.angle = None 
+            # For ServoKit objects (other servos)
+            for ch in SERVO_CHANNELS.values():
+                 if SERVO_CHANNELS.get(ch) not in SMOOTH_CHANNELS:
+                     self.kit.servo[ch].angle = None
             
+            # De-init the PCA9685
+            self.pca.deinit()
+        except Exception as e:
+            print(f"Teardown error: {e}")
 
-        
-        #base is 7V and not used atm
-        self.next_servo_angles["base"] = base
-        self.next_servo_angles["shoulder"] = shoulder
-        self.next_servo_angles["elbow"] = elbow
-        self.next_servo_angles["wrist"] = wrist
-        self.next_servo_angles["hand"] = hand
-
-        # self.servo_angles["hand"] = hand
-        self.update()
-
-    #return to netrual -- update included
-    def pose_neutral(self):
-        self.next_servo_angles["shoulder"] = 180
-        self.next_servo_angles["elbow"] = 135
-        self.next_servo_angles["wrist"] = 45
-        # self.next_servo_angles["hand"]  = 180
-        self.update()
-
-    '''
-    #currently deprecated from the servo update 11/17
-    def pose_ramp(self,shoulder, elbow, wrist):
-        step_deg = 1
-        step_sec = 0.02
-        #determine the direction of travel for each limb
-
-        # negative if set angle is less than current angle
-        # shoulder_dir = self.servo_angles["shoulder"] - shoulder
-        elbow_diff = elbow - self.servo_angles["elbow"]  
-        wrist_diff = wrist - self.servo_angles["wrist"]
-        
-        while(
-            # self.servo_angles["shoulder"] != shoulder + step
-            # self.servo_angles["elbow"] < elbow
-            abs(elbow_diff) - step_deg > 0 or abs(wrist_diff) - step_deg > 0
-        ):
-            if(elbow_diff > 0):
-                #keep this 
-                self.servo_angles["elbow"] = self.servo_angles["elbow"] + step_deg
-                #Try directly setting to ease some jitter -- still does the update
-                self.kit.servo[self.servo_channel["elbow"]].angle = self.servo_angles["elbow"] + step_deg
-            elif(elbow_diff < 0):
-                self.servo_angles["elbow"] = self.servo_angles["elbow"] - step_deg
-                self.kit.servo[self.servo_channel["elbow"]].angle = self.servo_angles["elbow"] - step_deg
-
-            if(wrist_diff > 0):
-                self.servo_angles["wrist"] = self.servo_angles["wrist"] + step_deg
-                self.kit.servo[self.servo_channel["wrist"]].angle = self.servo_angles["wrist"] + step_deg
-            elif(wrist_diff < 0):
-                self.servo_angles["wrist"] = self.servo_angles["wrist"] - step_deg
-                self.kit.servo[self.servo_channel["wrist"]].angle = self.servo_angles["wrist"] - step_deg
-            
-            # don't update if we do it here manually
-            # self.update(0)
-            elbow_diff = elbow - self.servo_angles["elbow"]
-            wrist_diff = wrist - self.servo_angles["wrist"]
-            # time.sleep(step_sec)
-    '''
-    # Sets the robot to look down towards block
-    def pose_45down(self):
-        self.next_servo_angles = self.servo_angles_45down
-        self.update()
-
-    # def rotate(self, base = 0)
-    
-    #Set the grib strength, barely touching is default. 180 is wide open
-    def grab(self, strength = 120):
-        self.next_servo_angles["hand"] = strength
-        self.update(0.5)
-        time.sleep(0.5)
-
-    #release grip to 100% open
-    def release(self):
-        self.servo_angles["hand"] = 180
-        self.update()
-    
-
-    # always close out here -- won't drop!
-    def pose_go_home(self):
-        self.next_servo_angles = self.servo_angles_default
-        # self.next_servo_angles["hand"] = grip # default grab 120 atm
-        self.update()
-        
-    # always close out here -- won't drop!
-    # 90, 120, 0
-    def pose_stand_up_look_forward(self, grip = 120):
-        self.next_servo_angles = self.servo_angles_default
-        self.next_servo_angles["hand"] = grip # default grab 120 atm
-        self.update()
-
-    # for comparing the DH table
-    def pose_reach_forward(self):
-        self.next_servo_angles = self.servo_angles_reach_forward
-        self.update()
-
-    # for comparing the DH table
-    def pose_straight_up(self):
-        self.next_servo_angles = self.servo_angles_straight_up
-        self.update()
-
-    def pose_elbow_L(self):
-        self.next_servo_angles = self.servo_angles_elbow_l
-        self.update()
-
-    def pose_wrist_L(self):
-        self.next_servo_angles = self.servo_angles_wrist_l
-        self.update()
-
-    # def close_down(self):
-    #     self.pose_go_home()
-    #     print("\nCleaning up PCA9685")
-    #     self.pca.deinit()
-        
-# rotate the base, rotate the wrist up
-# look right, 
-# if somethin's found: returns the angle of the base with the arm pointed at the detected object
-# if nothing's found: returns 0
-# ** Untested 11-17
-def look_left(self):
-    self.servo_angles["wrist"] = 45 # guessing
-    self.cube_found = False
-
-    step_size = 1 #? 2?
-    # need a ramp function for the base -- and a stop function
-
-    # while object not detected
-    # rotate base left
-    while(self.servo_angles["base"] + step_size < 180 and not cube_found):
-        self.servo_angles["base"] = self.servo_angles["base"] + step_size
-
-    if(cube_found):
-        return self.kit.servo[self.servo_channel["base"]].angle
-    else:
-        # look back
-        ''' or wherever midpoint is'''
-        while(self.servo_angles["base"] - step_size > 90 and not cube_found):
-            self.servo_angles["base"] = self.servo_angles["base"] + step_size
-
-        if(cube_found):
-            # small chance we catch it on the way back
-            return self.kit.servo[self.servo_channel["base"]].angle
-        else:
-            # we're back at neutral. -- nothing found
-            return 0
-    self.next_servo_angles = self.servo_angles_default
-
-# Guessing on the polarity of these
-# Lifts the wrist up to look horizontally, looks right, 
-# if somethin's found: returns the angle of the base with the arm pointed at the detected object
-# if nothing's found: returns 0
-# untested 11-17
-def look_right(self):
-    self.servo_angles["wrist"] = 45 # guessing
-    self.cube_found = False
-
-    step_size = 1 #? 2?
-    # need a ramp function for the base -- and a stop function
-
-    # while object not detected
-    # rotate base left
-
-    # Use this same logic to prevent overflow on the robo- ramp function
-    # this will have to change for the 
-    while(self.servo_angles["base"] - step_size > 0 and not cube_found):
-        self.servo_angles["base"] = self.servo_angles["base"] - step_size
-
-    if(self.cube_found):
-        return self.kit.servo[self.servo_channel["base"]].angle
-    else:
-        # look back
-        ''' or wherever midpoint is'''
-        while(self.servo_angles["base"] + step_size < 90 and not self.cube_found):
-            self.servo_angles["base"] = self.servo_angles["base"] + step_size
-
-        if(self.cube_found):
-            # small chance we catch it on the way back
-            return self.kit.servo[self.servo_channel["base"]].angle
-        else:
-            # we're back at neutral. 
-            return 0
-
-# we need a way to continously track the object? 
-# def track(self):
-    # reference gets posted - a distance or an angle 
-    # we minimize the difference between the reference and our value
+# ------------------------------------------------------------
+# Demo usage
+# ------------------------------------------------------------
 if __name__ == "__main__":
-    arm = robo_arm()
-    time.sleep(1)
+    arm = RobotArm()
+    time.sleep(0.5)
 
-    arm.pose(
-        # base = 90,
-        # shoulder = 90,
-        elbow = 100,
-        wrist = 40,
-        hand = 180
-        )
-    time.sleep(1)
-    arm.pose(
-        # base = 90,
-        # shoulder = 90,
-        elbow = 100,
-        wrist = 40,
-        hand = 0
-        )
-    time.sleep(1)
-    arm.pose(
-        # base = 90,
-        # shoulder = 90,
-        # elbow = 0,
-        # wrist = 40,
-        hand = 90
-        )
-    # arm.teardown()
+    print('------ DEFAULT --------')
+    arm.move_to_pose("default")
+    time.sleep(0.5)
+    arm.status()
+    
+    print('\n------ reach_forward --------')
+    arm.move_to_pose("reach_forward")
+    time.sleep(0.6)
+    arm.status()
 
-   
-    # arm.pose_elbow_L()
-    # arm.get_x_y()
-    # time.sleep(1)
+    # set_all with a dict (only the included joints are changed)
+    print('\n------ set_all (hybrid) --------')
+    # This will use custom smooth move for base/shoulder and ServoKit instant for elbow/wrist/hand
+    arm.set_all({'base': 180, 'shoulder': 90, 'elbow': 0, 'wrist': 0, 'hand': 180})
+    time.sleep(0.6)
+    arm.status()
 
-    # arm.pose_straight_up()
-    # arm.get_x_y()
-    # time.sleep(2)
-    # time.sleep(2)
+    # # Demonstration of manual APIs using the hybrid approach
+    # print('\n------ add_angle elbow (instant) --------')
+    # arm.add_angle("elbow", -10)
+    # time.sleep(0.5)
+    # arm.status()
 
-    # arm.pose_reach_forward()
-    # arm.get_x_y()
-    # time.sleep(2)
+    # print('\n------ add_angle base (smooth) --------')
+    # arm.add_angle("base", -20)
+    # time.sleep(0.5)
+    # arm.status()
 
+    # print('\n------ grab 40------')
+    # arm.grab(40)
+    # time.sleep(0.5)
+    # print('\n ------45_down------')
+    # arm.move_to_pose("45_down")
+    # time.sleep(0.6)
+    # arm.status()
 
+    # print('\n ------release------')
+    # arm.release()
+    # time.sleep(0.5)
 
-    # arm.pose_go_home()
-    print("This code runs when my_module.py is executed directly.")
+    print('\n ------Default------')
+    arm.move_to_pose("default")
+    arm.status()
+
