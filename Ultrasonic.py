@@ -14,22 +14,23 @@ from gpiozero.pins.pigpio import PiGPIOFactory
 import time
 
 class Ultrasonic:   
-    def __INIT__(self, RPI_IP_ADD, sample_rate = 10, )
+    def __init__(self, RPI_IP_ADD, trigger_pin, echo_pin, sample_rate = 10)
         
         # self,RPI_IP_ADD = '10.0.0.53' # T- hostname?
         self.running = False
         self.thread = None
         
-        self.factory = PiGPIOFactory(host=self.RPI_IP_ADD)      # gpio access lib -- set up required for pigpio. -- sudo pigpiod
+        self.factory = PiGPIOFactory(host=RPI_IP_ADD)      # gpio access lib -- set up required for pigpio. -- sudo pigpiod
         last_time = time.time()                       # timestamp
         period = 1/sample_rate                        # time btn publishing samples
 
-        self.sensor = DistanceSensor(echo=17, trigger=27, pin_factory=self.factory)
+        self.sensor = DistanceSensor(echo_pin=17, triggtrigger_piner=27, pin_factory=self.factory)
         while True:
             if(time.time() > last_time):
                 
                 self.ping_dist = self.sensor.distance * 100  #cm
                 last_time = time.time()
+
 
 
 
@@ -51,7 +52,7 @@ class Ultrasonic:
 
 
 
-        
+
 
 # ------------------------------
 # THREAD SUPPORT FOR MAIN PROGRAM
