@@ -38,8 +38,8 @@ class RobotArm:
 
     POSES = {
         "default":      {"base": 90, "shoulder": 180, "elbow": 0,  "wrist": 0,  "hand": 180},
-        "reach_forward":{"base": 0,  "shoulder": 180, "elbow": 85, "wrist": 90, "hand": 180},
-        "45_down":      {"base": 0,  "shoulder": 90,  "elbow": 180,"wrist": 0,  "hand": 180},
+        "45_down":      {"base": 90,  "shoulder": 90,  "elbow": 100,"wrist": 0,  "hand": 180},
+        "reach_forward":{"base": 90,  "shoulder": 180, "elbow": 85, "wrist": 90, "hand": 180},
         "safe":         {"base": 0,  "shoulder": 180, "elbow": 0,  "wrist": 180,"hand": 180},
         "straight_up":  {"base": 0,  "shoulder": 90,  "elbow": 90, "wrist": 90,"hand": 90},
         "elbow_L":      {"base": 0,  "shoulder": 90,  "elbow": 180,"wrist": 90,"hand": 180},
@@ -132,6 +132,23 @@ class RobotArm:
 
     def move_to_pose(self, name):
         print(f"Pose: {name}")
+        # if name == "default":
+        #     # Step 1 — tuck small joints instantly
+        #     self.set_joint("hand", 180)
+        #     self.set_joint("wrist", 90)
+
+        #     time.sleep(0.2)
+
+        #     # Step 2 — tuck elbow (instant)
+        #     self.set_joint("elbow", 0)
+        #     time.sleep(0.2)
+
+        #     # Step 3 — now move big sweeping joints
+        #     self.set_joint("shoulder", 180)
+        #     self.set_joint("base", 90)
+
+        #     # self.status()
+        #     return 
         self.set_all(self.POSES[name])
 
     def status(self):
@@ -144,68 +161,59 @@ class RobotArm:
         """
         Compute base, shoulder, elbow, and wrist angles
         for a (x, y, z) target in cm.
-        Uses 3-link IK with link lengths measured from your robot.
+        Uses 3-link IK with measured link lengths.
         """
 
         # Your real robot link lengths (cm)
-        L1 = 7.0   # shoulder → elbow
-        L2 = 6.0   # elbow → wrist
-        L3 = 4.5   # wrist → gripper offset
+        L1 = 6.5   # shoulder → elbow
+        L2 = 6.5   # elbow → wrist
+        L3 = 5.0   # wrist → gripper offset
 
-        # -----------------------------------------
-        # 1) BASE rotation (simple planar rotation)
-        # -----------------------------------------
+        # -----------------------------
+        # 1) BASE rotation (planar)
+        # -----------------------------
         base_angle = math.degrees(math.atan2(y, x))
 
-        # Distance from base origin in horizontal plane
+        # Horizontal distance from base origin
         r = math.sqrt(x**2 + y**2)
+        h = z  # vertical distance
 
-        # Vertical coordinate
-        h = z
+        # Offset for wrist (so IK solves for wrist, not gripper tip)
+        wx = r - L3
+        wz = h
 
-        # Subtract the wrist offset L3 from r and h
-        # So IK computes elbow pointing to the wrist joint, not the gripper tip
-        wx = r - L3   # projected x-distance to wrist pivot
-        wz = h        # z stays the same (offset is horizontal only)
-
-        # ------------------------------
+        # -----------------------------
         # 2) Distance from shoulder → wrist
-        # ------------------------------
+        # -----------------------------
         d = math.sqrt(wx**2 + wz**2)
 
-        # Check if reachable
+        # Check if target is reachable
         if d > (L1 + L2):
             raise ValueError(f"Target ({x},{y},{z}) out of reach")
 
-        # ------------------------------
-        # 3) SHOULDER ANGLE
-        # ------------------------------
-
+        # -----------------------------
+        # 3) SHOULDER angle
+        # -----------------------------
         theta = math.degrees(math.atan2(wz, wx))
-
-        # Law of cosines (inner angle at shoulder)
         cos_a = (L1**2 + d**2 - L2**2) / (2 * L1 * d)
         a = math.degrees(math.acos(cos_a))
-
         shoulder_angle = theta + a  # typical forward arm pose
 
-        # ------------------------------
-        # 4) ELBOW ANGLE
-        # ------------------------------
-
+        # -----------------------------
+        # 4) ELBOW angle
+        # -----------------------------
         cos_b = (L1**2 + L2**2 - d**2) / (2 * L1 * L2)
         b = math.degrees(math.acos(cos_b))
+        elbow_angle = 180 - b  # servo geometry
 
-        elbow_angle = 180 - b   # servo geometry (folds inward)
-
-        # ------------------------------
-        # 5) WRIST ANGLE (keep tool vertical)
-        # ------------------------------
+        # -----------------------------
+        # 5) WRIST angle (keep gripper vertical)
+        # -----------------------------
         wrist_angle = 180 - (shoulder_angle + elbow_angle)
 
-        # ------------------------------
+        # -----------------------------
         # 6) Execute the arm movement
-        # ------------------------------
+        # -----------------------------
         self.set_all({
             "base": base_angle,
             "shoulder": shoulder_angle,
@@ -235,7 +243,7 @@ if __name__ == "__main__":
     
     print('\n------ reach_forward --------')
     arm.move_to_pose("reach_forward")
-    time.sleep(0.6)
+    time.sleep(7)
     arm.status()
 
     print('\n------ DEFAULT --------')
@@ -244,16 +252,20 @@ if __name__ == "__main__":
     arm.status()
 
     print('\n------ set_all (hybrid) --------')
-    arm.set_all({'base': 180, 'shoulder':90, 'elbow': 0, 'wrist': 0, 'hand': 180})
-    time.sleep(0.6)
-    arm.status()
+    arm.set_all({'base': 112.0, 'shoulder': 127.0, 'elbow': 75.0, 'wrist': 0})
+    time.sleep(10)
+    # # arm.set_all({"hand": 180,"wrist": 0,"elbow": 0,"shoulder": 180, "base": 90,})
+    # # time.sleep(2)
+    # arm.status()
 
     print('\n ------Default------')
     arm.move_to_pose("default")
+    time.sleep(7)
     arm.status()
 
     # print("\n------ Move to XYZ (10, 5, 8) ------")
-    # result = arm.move_xyz(5, 0, 0)
+    # result = arm.move_xyz(10, 0, -6)
+    # time.sleep(0.6)
     # print("IK Angles:", result)
     # arm.status()
 
