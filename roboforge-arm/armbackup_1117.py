@@ -4,6 +4,7 @@ import busio
 from adafruit_pca9685 import PCA9685
 from adafruit_motor import servo
 from adafruit_servokit import ServoKit
+import math
 
 
 class RobotArm:
@@ -132,10 +133,92 @@ class RobotArm:
     def move_to_pose(self, name):
         print(f"Pose: {name}")
         self.set_all(self.POSES[name])
-        print("reached")
 
     def status(self):
         print("Angles:", self.current)
+
+    # ------------------------------------------------------------
+    # Move using inverse kinematics with YOUR real robot lengths
+    # ------------------------------------------------------------
+    def move_xyz(self, x, y, z):
+        """
+        Compute base, shoulder, elbow, and wrist angles
+        for a (x, y, z) target in cm.
+        Uses 3-link IK with link lengths measured from your robot.
+        """
+
+        # Your real robot link lengths (cm)
+        L1 = 7.0   # shoulder → elbow
+        L2 = 6.0   # elbow → wrist
+        L3 = 4.5   # wrist → gripper offset
+
+        # -----------------------------------------
+        # 1) BASE rotation (simple planar rotation)
+        # -----------------------------------------
+        base_angle = math.degrees(math.atan2(y, x))
+
+        # Distance from base origin in horizontal plane
+        r = math.sqrt(x**2 + y**2)
+
+        # Vertical coordinate
+        h = z
+
+        # Subtract the wrist offset L3 from r and h
+        # So IK computes elbow pointing to the wrist joint, not the gripper tip
+        wx = r - L3   # projected x-distance to wrist pivot
+        wz = h        # z stays the same (offset is horizontal only)
+
+        # ------------------------------
+        # 2) Distance from shoulder → wrist
+        # ------------------------------
+        d = math.sqrt(wx**2 + wz**2)
+
+        # Check if reachable
+        if d > (L1 + L2):
+            raise ValueError(f"Target ({x},{y},{z}) out of reach")
+
+        # ------------------------------
+        # 3) SHOULDER ANGLE
+        # ------------------------------
+
+        theta = math.degrees(math.atan2(wz, wx))
+
+        # Law of cosines (inner angle at shoulder)
+        cos_a = (L1**2 + d**2 - L2**2) / (2 * L1 * d)
+        a = math.degrees(math.acos(cos_a))
+
+        shoulder_angle = theta + a  # typical forward arm pose
+
+        # ------------------------------
+        # 4) ELBOW ANGLE
+        # ------------------------------
+
+        cos_b = (L1**2 + L2**2 - d**2) / (2 * L1 * L2)
+        b = math.degrees(math.acos(cos_b))
+
+        elbow_angle = 180 - b   # servo geometry (folds inward)
+
+        # ------------------------------
+        # 5) WRIST ANGLE (keep tool vertical)
+        # ------------------------------
+        wrist_angle = 180 - (shoulder_angle + elbow_angle)
+
+        # ------------------------------
+        # 6) Execute the arm movement
+        # ------------------------------
+        self.set_all({
+            "base": base_angle,
+            "shoulder": shoulder_angle,
+            "elbow": elbow_angle,
+            "wrist": wrist_angle
+        })
+
+        return {
+            "base": base_angle,
+            "shoulder": shoulder_angle,
+            "elbow": elbow_angle,
+            "wrist": wrist_angle
+        }
 
 
 # ------------------------------------------------------------
@@ -155,15 +238,24 @@ if __name__ == "__main__":
     time.sleep(0.6)
     arm.status()
 
-    print('------ DEFAULT --------')
+    print('\n------ DEFAULT --------')
     arm.move_to_pose("default")
     time.sleep(0.5)
     arm.status()
 
     print('\n------ set_all (hybrid) --------')
-    arm.set_all({'base': 180, 'shoulder':180, 'elbow': 0, 'wrist': 0, 'hand': 180})
+    arm.set_all({'base': 180, 'shoulder':90, 'elbow': 0, 'wrist': 0, 'hand': 180})
     time.sleep(0.6)
     arm.status()
+
+    print('\n ------Default------')
+    arm.move_to_pose("default")
+    arm.status()
+
+    # print("\n------ Move to XYZ (10, 5, 8) ------")
+    # result = arm.move_xyz(5, 0, 0)
+    # print("IK Angles:", result)
+    # arm.status()
 
     print('\n ------Default------')
     arm.move_to_pose("default")
