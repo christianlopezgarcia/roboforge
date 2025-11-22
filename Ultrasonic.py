@@ -28,17 +28,10 @@ def Ultrasonic(RPI_IP_ADD, sample_rate, echo_pin, trigger_pin):
 
         sensor = DistanceSensor(echo_pin=17, trigger_piner=27, pin_factory=factory)
         while True:
-            if(time.time() > last_time):
-
-                self.ping_dist = self.sensor.distance * 100  #cm
+            if(time.time() - last_time > period):
+                ping_dist = sensor.distance * 100  #cm
                 last_time = time.time()
-
     
-
-
-
-
-
 
 # ------------------------------
 # THREAD SUPPORT FOR MAIN PROGRAM
@@ -47,28 +40,27 @@ def Ultrasonic(RPI_IP_ADD, sample_rate, echo_pin, trigger_pin):
 import threading
 
 def start_thread():
-    """Starts run() inside a daemon thread so main.py can use it."""
-    global STEREO_THREAD, STOP_FLAG
-    if STEREO_THREAD is not None and STEREO_THREAD.is_alive():
-        print("[Stereo] Already running.")
+    """Starts Urltrasonic() inside a daemon thread so main.py can use it."""
+    global ULTRASONIC_THREAD, STOP_FLAG
+    if ULTRASONIC_THREAD is not None and ULTRASONIC_THREAD.is_alive():
+        print("[Ultrasonic] Already running.")
         return
-
     STOP_FLAG = False
 
     def runner():
-        run()  # your original run() loops until STOP_FLAG or 'q'
+        Ultrasonic()  # your original Ultrasonic() loops until STOP_FLAG or 'q'
 
-    STEREO_THREAD = threading.Thread(target=runner, daemon=True)
-    STEREO_THREAD.start()
-    print("[Stereo] Started thread.")
+    ULTRASONIC_THREAD = threading.Thread(target=runner, daemon=True)
+    ULTRASONIC_THREAD.start()
+    print("[Ultrasonic] Started thread.")
 
 
 def stop_thread():
-    """Signals run() to exit cleanly."""
+    """Signals Ultrasonic() to exit cleanly."""
     global STOP_FLAG
     STOP_FLAG = True
-    print("[Stereo] Stop requested.")
+    print("[Ultrasonic] Stop requested.")
 
 
 if __name__ == '__main__':
-    run()
+    Ultrasonic()
