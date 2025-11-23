@@ -6,7 +6,7 @@ import adafruit_bno055
 import adafruit_pca9685
 import json
 import math
-
+import threading
 
 class BNO055:
     
@@ -238,17 +238,6 @@ class myMotors():
     
     pinAssignments = {"FR":12,"FL":10,"BR":14,"BL":8}
     
-    ################## Throttle PID ###############
-    speed_p = 0
-    speed_i = 0
-    
-    speed_p_buff = 0
-    speed_i_buff = 0
-    speed_total_buff = 0
-        
-    speed_p_limit = 1000
-    speed_i_limit = 10
-    speed_total_limit = speed_p_limit + speed_i_limit
     ################## Steering PID ###############
     angle_p = 0
     angle_i = 0
@@ -271,13 +260,12 @@ class myMotors():
     last_angle_error = 0
     
     motor_value_limit = 25 #Percent
+    speed_limit = 0.5 #m/s
     
-    def __init__(self,myIMUobj,myPWMobj,speed_pid,angle_pid):
+    def __init__(self,myIMUobj,myPWMobj,angle_pid):
         
         self.myIMU = myIMUobj
         self.myPWM = myPWMobj        
-        self.speed_p = speed_pid[0]
-        self.speed_i = speed_pid[1]
         
         self.angle_p = angle_pid[0]
         self.angle_i = angle_pid[1]
@@ -287,9 +275,13 @@ class myMotors():
     
     def set_desired_angle(self,angle):
         self.desired_angle = angle
-        
+        self.angle_i_buff = 0
+            
     def set_desired_speed(self,speed):
-        self.desired_speed = speed
+        if(speed > 0):
+            self.desired_speed = 40
+        else:
+            self.desired_speed = 0
    
   
     def set_single_motor(self,motor,percent,reverse):
@@ -316,10 +308,6 @@ class myMotors():
     def limit_pid_component(self, value, limit):
         value = max(-1*limit, min(value, limit))
         return value
-    
-    def limit_speed_pid(self):
-        self.speed_p_buff = self.limit_pid_component(self.speed_p_buff, self.speed_p_limit)
-        self.speed_i_buff = self.limit_pid_component(self.speed_i_buff, self.speed_i_limit)
         
     def limit_angle_pid(self):
         self.angle_p_buff = self.limit_pid_component(self.angle_p_buff, self.angle_p_limit)
@@ -331,18 +319,6 @@ class myMotors():
         else:
             return value
         
-    def update_speed_pid(self):
-        speed_error = self.desired_speed - self.current_speed
-        
-        now = time.time()
-        dt = now - self.last_time_speed
-        
-        self.speed_p_buff = speed_error * self.speed_p
-        self.speed_i_buff += speed_error*dt * self.speed_i
-        self.limit_speed_pid()
-        self.speed_total_buff = self.speed_p_buff + self.speed_i_buff
-        
-        self.last_time_speed = time.time()
 
     def update_angle_pid(self):
         angle_error = self.desired_angle - self.current_angle
@@ -362,12 +338,7 @@ class myMotors():
         
 
     def update_motor_output_tank(self):
-        if(self.speed_total_buff < 0):
-            motor_speed_value = self.speed_total_buff*(50/self.speed_total_limit)
-        elif(self.speed_total_buff > 0):
-            motor_speed_value = -self.speed_total_buff*(50/self.speed_total_limit)
-        else:
-            motor_speed_value = 0
+        motor_speed_value = self.desired_speed
 
         if(self.angle_total_buff < 0):
             motor_angle_value = self.angle_total_buff*(50/self.angle_total_limit)
@@ -427,21 +398,21 @@ class myMotors():
         #set back left motor
         self.set_single_motor("BL", motor_value_BL,0)
         
+    def spin_motor(self,angle_per_cycle):
+        self.set_desired_angle(self.current_angle + angle_per_cycle)
+        
             
     def update_motors(self):
-        
-        self.current_angle = self.none_check(self.current_angle,self.myIMU.get_angle()[0])
-        self.current_speed = self.none_check(self.current_speed,self.myIMU.velocity_to_speed())
-        
+
         if((self.last_enable_pid_arr != self.enable_pid_arr) or (self.last_arm_motors != self.arm_motors)):
-            self.reset_motors()
+            self.kill_motors()
+            
         self.last_arm_motors = self.arm_motors
         self.last_enable_pid_arr = self.enable_pid_arr
-                           
+        
+        self.current_angle = self.none_check(self.current_angle,self.myIMU.get_angle()[0])                   
         if(self.arm_motors):
             if(self.enable_pid_arr):
-                if(self.enable_pid_arr[0]):
-                    self.update_speed_pid()
                 if(self.enable_pid_arr[1]):
                     self.update_angle_pid()
                 self.update_motor_output_tank()
@@ -461,6 +432,9 @@ class myMotors():
         self.desired_angle = self.current_angle
         self.desired_speed = 0
         
+        self.angle_p_buff = 0
+        self.angle_i_buff = 0
+        
     def none_check(self,old_data,new_data):
         if(new_data is None):
             print("None Error")
@@ -474,14 +448,10 @@ class myMotors():
     def reset_motors(self):
         self.kill_motors()
                 
-        self.speed_p_buff = 0
-        self.speed_i_buff = 0    
         self.angle_p_buff = 0
         self.angle_i_buff = 0
         
-        self.current_speed = 0
         self.current_angle = 0
-        self.last_speed_error = 0
         self.last_angle_error = 0
     
     def set_speed_pid_enable(self,enable):
@@ -498,25 +468,27 @@ class myMotors():
         
     def print_state_info(self):
         print("--------------State Info------------------")
-        print("Current Speed : " + str(self.current_speed) + "m/s")
-        print("Desired Speed : " + str(self.desired_speed) + "m/s")
         print("Current Angle : " + str(self.current_angle) + " Degrees")
         print("Desired Angle : " + str(self.desired_angle) + " Degrees")
         print("")
         
     def print_pid_info(self):
         print("--------------PID Info------------------")
-        print("P Buffer Value (Speed): " + str(self.speed_p_buff))
-        print("I Buffer Value (Speed)): " + str(self.speed_i_buff))
-        print("Total Buffer Value (Speed)): " + str(self.speed_total_buff))
-        print("Percent Motor Power (Speed)" + str(self.speed_total_buff/self.speed_total_limit*50)) 
         print("P Buffer Value (Angle): " + str(self.angle_p_buff)) 
         print("I Buffer Value (Angle): " + str(self.angle_i_buff))
         print("Total Buffer Value (Angle): " + str(self.angle_total_buff))
         print("Percent Motor Power (Angle)" + str(self.angle_total_buff/self.angle_total_limit*50))
         print("")
 
-    
+
+def motor_thread(update_time):
+    time_last_update = time.time()
+    while True:
+        if(time.time() - time_last_update > update_time):
+            motors.update_motors()
+            time_last_update = time.time()
+
+   
 if __name__ == "__main__":
     
     #Create I2C Objects
@@ -524,16 +496,17 @@ if __name__ == "__main__":
     bno = BNO055(i2c)
     pca = PCA9685PWM(i2c)
     
+    angle_pid_p = 1.5
+    angle_pid_i = 0.1
+    angle_pid = [angle_pid_p,angle_pid_i]
     #Create Motors Object
-    motors = myMotors(bno,pca,[5000,10],[1.5,0.1])
+    motors = myMotors(bno,pca,angle_pid)
     
-    #Auto Control
+    #Auto Control # arm and initiallize
     motors.set_arming_status(1)
-    motors.set_speed_pid_enable(1)
-    motors.set_angle_pid_enable(0)
-    
-    motors.set_desired_angle(20) #Degrees right +, left - (-180 to 180)
-    motors.set_desired_speed(0.1) #m/s
+    motors.set_angle_pid_enable(1)
+    motors.set_desired_speed(0)
+    motors.set_desired_angle(motors.current_angle)
     
     #Direct Control
     #motors.set_single_motor("FR",100,1)
@@ -541,20 +514,21 @@ if __name__ == "__main__":
     #motors.set_single_motor("BR",100,1)
     #motors.set_single_motor("BL",-100,0)
 
-    update_time = 0.01 #seconds
+    update_time = 0.1 #seconds
     print_time = 1 #seconds
-    max_runtime = 20 #seconds
+    max_runtime = 30 #seconds
     
     time_start = time.time()
-    time_last_update = time.time()
     time_last_print = time.time()
     
+    motor_task = threading.Thread(target = motor_thread, args=(update_time), daemon=True)
+    motor_task.start()
+    
     while 1:
-        motors.set_desired_speed(0.1)
+        
         #Update Motors
-        if(time.time() - time_last_update > update_time):
-            motors.update_motors()
-            time_last_update = time.time()
+        motors.set_desired_speed(0)
+        motors.spin_motor(10)
             
         #Print Info
         if(time.time() - time_last_print > print_time):
@@ -567,10 +541,6 @@ if __name__ == "__main__":
         if(rutime_break):
             break
         
+        
     print("done")
     motors.kill_motors()  
-
-
-
-
-
