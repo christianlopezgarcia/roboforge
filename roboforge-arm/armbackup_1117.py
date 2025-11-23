@@ -21,7 +21,7 @@ class RobotArm:
     SMALL = {"elbow", "wrist", "hand"}
 
     STARTUP = {
-        "base": 90,
+        "base": 105,
         "shoulder": 180,
         "elbow": 0,
         "wrist": 0,
@@ -37,13 +37,13 @@ class RobotArm:
     }
 
     POSES = {
-        "default":      {"base": 90, "shoulder": 180, "elbow": 0,  "wrist": 0,  "hand": 180},
-        "45_down":      {"base": 90,  "shoulder": 90,  "elbow": 100,"wrist": 0,  "hand": 180},
-        "reach_forward":{"base": 90,  "shoulder": 180, "elbow": 85, "wrist": 90, "hand": 180},
-        "safe":         {"base": 0,  "shoulder": 180, "elbow": 0,  "wrist": 180,"hand": 180},
-        "straight_up":  {"base": 0,  "shoulder": 90,  "elbow": 90, "wrist": 90,"hand": 90},
-        "elbow_L":      {"base": 0,  "shoulder": 90,  "elbow": 180,"wrist": 90,"hand": 180},
-        "wrist_L":      {"base": 0,  "shoulder": 90,  "elbow": 90, "wrist": 0,"hand": 180},
+        "default":      {"base": 105, "shoulder": 180, "elbow": 0,  "wrist": 0,  "hand": 180},
+        "45_down":      {"base": 105,  "shoulder": 90,  "elbow": 100,"wrist": 0,  "hand": 180},
+        "reach_forward":{"base": 105,  "shoulder": 180, "elbow": 85, "wrist": 90, "hand": 180},
+        "safe":         {"base": 105,  "shoulder": 180, "elbow": 0,  "wrist": 180,"hand": 180},
+        "straight_up":  {"base": 105,  "shoulder": 90,  "elbow": 90, "wrist": 90,"hand": 90},
+        "elbow_L":      {"base": 105,  "shoulder": 90,  "elbow": 180,"wrist": 90,"hand": 180},
+        "wrist_L":      {"base": 105,  "shoulder": 90,  "elbow": 90, "wrist": 0,"hand": 180},
     }
 
     MIN_PULSE = 500
@@ -243,25 +243,25 @@ if __name__ == "__main__":
     
     print('\n------ reach_forward --------')
     arm.move_to_pose("reach_forward")
-    time.sleep(7)
+    time.sleep(2)
     arm.status()
 
-    print('\n------ DEFAULT --------')
-    arm.move_to_pose("default")
-    time.sleep(0.5)
-    arm.status()
+    # print('\n------ DEFAULT --------')
+    # arm.move_to_pose("default")
+    # time.sleep(0.5)
+    # arm.status()
 
     print('\n------ set_all (hybrid) --------')
-    arm.set_all({'base': 112.0, 'shoulder': 127.0, 'elbow': 75.0, 'wrist': 0})
-    time.sleep(10)
+    arm.set_all({"base": 105, "shoulder": 180, "elbow": 0,  "wrist": 0,  "hand": 180},)
+    time.sleep(3)
     # # arm.set_all({"hand": 180,"wrist": 0,"elbow": 0,"shoulder": 180, "base": 90,})
     # # time.sleep(2)
     # arm.status()
 
-    print('\n ------Default------')
-    arm.move_to_pose("default")
-    time.sleep(7)
-    arm.status()
+    # print('\n ------Default------')
+    # arm.move_to_pose("default")
+    # time.sleep(7)
+    # arm.status()
 
     # print("\n------ Move to XYZ (10, 5, 8) ------")
     # result = arm.move_xyz(10, 0, -6)
