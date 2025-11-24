@@ -361,11 +361,11 @@ class myMotors():
         #set front right motor
         self.set_single_motor("FR", motor_value_FR,1)
         #set front left motor
-        self.set_single_motor("FL", motor_value_FL,0)
+        self.set_single_motor("FL", motor_value_FL,1)
         #set back right motor
         self.set_single_motor("BR", motor_value_BR,1)
         #set back left motor
-        self.set_single_motor("BL", motor_value_BL,0)
+        self.set_single_motor("BL", motor_value_BL,1)
     
     def update_motor_output_mechanum(self):
         mask = np.array([ #FR  #FL  #BR  #BL
@@ -393,11 +393,11 @@ class myMotors():
         #set front right motor
         self.set_single_motor("FR", motor_value_FR,1)
         #set front left motor
-        self.set_single_motor("FL", motor_value_FL,0)
+        self.set_single_motor("FL", motor_value_FL,1)
         #set back right motor
         self.set_single_motor("BR", motor_value_BR,1)
         #set back left motor
-        self.set_single_motor("BL", motor_value_BL,0)
+        self.set_single_motor("BL", motor_value_BL,1)
         
     def spin_motor(self,angle_per_cycle):
         self.set_desired_angle(self.current_angle + angle_per_cycle)
@@ -426,9 +426,9 @@ class myMotors():
 
     def kill_motors(self):
         self.set_single_motor("FR",0,1)
-        self.set_single_motor("FL",0,0)
+        self.set_single_motor("FL",0,1)
         self.set_single_motor("BR",0,1)
-        self.set_single_motor("BL",0,0)
+        self.set_single_motor("BL",0,1)
         
         self.desired_angle = self.current_angle
         self.desired_speed = 0
@@ -521,15 +521,18 @@ if __name__ == "__main__":
     
     time_start = time.time()
     time_last_print = time.time()
-    
-    motor_task = threading.Thread(target = motor_thread, args=(update_time), daemon=True)
-    motor_task.start()
+    time_last_update = time.time()
+    # motor_task = threading.Thread(target = motor_thread, args=(update_time,motors), daemon=True)
+    # motor_task.start()
     
     while 1:
         
         #Update Motors
-        motors.set_desired_speed(0)
-        motors.spin_motor(10)
+        #motors.set_desired_speed(0.1)
+        motors.set_desired_speed(10)
+        if(time.time() - time_last_update > update_time):
+            motors.update_motors()
+            time_last_update = time.time()
             
         #Print Info
         if(time.time() - time_last_print > print_time):
@@ -544,4 +547,4 @@ if __name__ == "__main__":
         
         
     print("done")
-    motors.kill_motors()
+    motors.kill_motors()  
