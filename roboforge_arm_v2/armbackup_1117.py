@@ -37,13 +37,15 @@ class RobotArm:
     }
 
     POSES = {
-        "default":      {"base": 105, "shoulder": 180, "elbow": 0,  "wrist": 0,  "hand": 180},
+        "default":      {"base": 105, "shoulder": 180, "elbow": 30,  "wrist": 0,  "hand": 180}, #solid
+        "focused":      {"base": 105,  "shoulder": 90,  "elbow": 180,"wrist": 0,  "hand": 180}, #solid
+        "wide_view":    {"base": 105, "shoulder": 180, "elbow": 45,  "wrist": 0,  "hand": 180}, #solid
         "45_down":      {"base": 105,  "shoulder": 90,  "elbow": 100,"wrist": 0,  "hand": 180},
         "reach_forward":{"base": 105,  "shoulder": 180, "elbow": 85, "wrist": 90, "hand": 180},
         "safe":         {"base": 105,  "shoulder": 180, "elbow": 0,  "wrist": 180,"hand": 180},
         "straight_up":  {"base": 105,  "shoulder": 90,  "elbow": 90, "wrist": 90,"hand": 90},
         "elbow_L":      {"base": 105,  "shoulder": 90,  "elbow": 180,"wrist": 90,"hand": 180},
-        "wrist_L":      {"base": 105,  "shoulder": 90,  "elbow": 90, "wrist": 0,"hand": 180},
+        "wrist_L":      {"base": 105,  "shoulder": 90,  "elbow": 100,"wrist": 0,  "hand": 180}, #solid
     }
 
     MIN_PULSE = 500
@@ -234,7 +236,7 @@ class RobotArm:
 # ------------------------------------------------------------
 if __name__ == "__main__":
     i2c_obj = busio.I2C(board.SCL, board.SDA)
-    arm = RobotArm()
+    arm = RobotArm(i2c_obj)
     time.sleep(0.5)
 
     print('------ DEFAULT --------')
@@ -242,10 +244,10 @@ if __name__ == "__main__":
     time.sleep(0.5)
     arm.status()
     
-    print('\n------ reach_forward --------')
-    arm.move_to_pose("reach_forward")
-    time.sleep(2)
-    arm.status()
+    # print('\n------ reach_forward --------')
+    # arm.move_to_pose("reach_forward")
+    # time.sleep(2)
+    # arm.status()
 
     # print('\n------ DEFAULT --------')
     # arm.move_to_pose("default")
@@ -253,16 +255,20 @@ if __name__ == "__main__":
     # arm.status()
 
     print('\n------ set_all (hybrid) --------')
-    arm.set_all({"base": 105, "shoulder": 180, "elbow": 0,  "wrist": 0,  "hand": 180},)
-    time.sleep(3)
+    # arm.set_all({"base": 105,  "shoulder": 90,  "elbow": 150,"wrist": 0,  "hand": 180}) #cool up right pose WALLE mode
+    # time.sleep(15)
     # # arm.set_all({"hand": 180,"wrist": 0,"elbow": 0,"shoulder": 180, "base": 90,})
     # # time.sleep(2)
     # arm.status()
 
-    # print('\n ------Default------')
-    # arm.move_to_pose("default")
-    # time.sleep(7)
-    # arm.status()
+    print('\n ------Default------')
+    arm.move_to_pose("wide_view")
+    time.sleep(4)
+    arm.status()
+    
+    arm.move_to_pose("focused")
+    time.sleep(4)
+    arm.status()
 
     # print("\n------ Move to XYZ (10, 5, 8) ------")
     # result = arm.move_xyz(10, 0, -6)

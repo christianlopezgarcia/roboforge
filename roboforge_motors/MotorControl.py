@@ -204,7 +204,7 @@ class BNO055:
         x=1
 
 class PCA9685PWM:
-    def __init__(self, i2c, freq_hz=1000):
+    def __init__(self, i2c, freq_hz=50):
         self.pca = adafruit_pca9685.PCA9685(i2c)
         self.pca.frequency = freq_hz
 
@@ -517,7 +517,7 @@ if __name__ == "__main__":
 
     update_time = 0.1 #seconds
     print_time = 1 #seconds
-    max_runtime = 30 #seconds
+    max_runtime = 1 #seconds
     
     time_start = time.time()
     time_last_print = time.time()
