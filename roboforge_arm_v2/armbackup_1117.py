@@ -51,9 +51,9 @@ class RobotArm:
     STEP = 2
     DELAY = 0.05
 
-    def __init__(self):
+    def __init__(self, i2c_obj):
 
-        self.i2c = busio.I2C(board.SCL, board.SDA)
+        self.i2c = i2c_obj
         self.pca = PCA9685(self.i2c)
         self.pca.frequency = 50
         self.kit = ServoKit(channels=16, i2c=self.i2c)
@@ -233,6 +233,7 @@ class RobotArm:
 # Demo usage
 # ------------------------------------------------------------
 if __name__ == "__main__":
+    i2c_obj = busio.I2C(board.SCL, board.SDA)
     arm = RobotArm()
     time.sleep(0.5)
 
