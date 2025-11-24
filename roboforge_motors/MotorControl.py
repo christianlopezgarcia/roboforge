@@ -162,7 +162,7 @@ class BNO055:
         print(f"Calibrated bias: {self.accel_cal}")
 
     
-    CAL_FILE = "calibration.json"
+    CAL_FILE = "/home/clopezgarcia2/Desktop/roboforge/roboforge_motors/calibration.json"
 
     def save_calibration(self):
         """Save current calibration offsets/radii to a file."""

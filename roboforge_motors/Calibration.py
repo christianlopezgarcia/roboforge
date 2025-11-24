@@ -253,6 +253,6 @@ if __name__ == "__main__":
     i2c = busio.I2C(board.SCL, board.SDA)
     bno = BNO055(i2c)
     
-    bno.calibrate_sensor
+    bno.calibrate_sensor()
    
     print("done")  
