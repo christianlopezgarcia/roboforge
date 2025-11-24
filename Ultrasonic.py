@@ -78,6 +78,6 @@ if __name__ == '__main__':
     sample_rate = 10 
     echo_pin = 17   
     trigger_pin = 27
-    Ultrasonic(IP, sample_rate, echo_pin, trigger_pin)
+    Ultrasonic(sample_rate, echo_pin, trigger_pin)
 
     
