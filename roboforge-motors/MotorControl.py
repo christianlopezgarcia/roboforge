@@ -322,8 +322,9 @@ class myMotors():
 
     def update_angle_pid(self):
         angle_error = self.desired_angle - self.current_angle
+        # print("\nCurrent Angle:", self.current_angle, "Disired_angle", self.desired_angle)
         angle_error_wrapped = self.angle_wrap(angle_error)
-        
+        # print(angle_error_wrapped)
         now = time.time()
         dt = now - self.last_time_angle
 
@@ -360,11 +361,11 @@ class myMotors():
         #set front right motor
         self.set_single_motor("FR", motor_value_FR,1)
         #set front left motor
-        self.set_single_motor("FL", motor_value_FL,0)
+        self.set_single_motor("FL", motor_value_FL,1)
         #set back right motor
         self.set_single_motor("BR", motor_value_BR,1)
         #set back left motor
-        self.set_single_motor("BL", motor_value_BL,0)
+        self.set_single_motor("BL", motor_value_BL,1)
     
     def update_motor_output_mechanum(self):
         mask = np.array([ #FR  #FL  #BR  #BL
@@ -392,11 +393,11 @@ class myMotors():
         #set front right motor
         self.set_single_motor("FR", motor_value_FR,1)
         #set front left motor
-        self.set_single_motor("FL", motor_value_FL,0)
+        self.set_single_motor("FL", motor_value_FL,1)
         #set back right motor
         self.set_single_motor("BR", motor_value_BR,1)
         #set back left motor
-        self.set_single_motor("BL", motor_value_BL,0)
+        self.set_single_motor("BL", motor_value_BL,1)
         
     def spin_motor(self,angle_per_cycle):
         self.set_desired_angle(self.current_angle + angle_per_cycle)
@@ -410,7 +411,9 @@ class myMotors():
         self.last_arm_motors = self.arm_motors
         self.last_enable_pid_arr = self.enable_pid_arr
         
-        self.current_angle = self.none_check(self.current_angle,self.myIMU.get_angle()[0])                   
+        self.current_angle = self.none_check(self.current_angle,self.myIMU.get_angle()[0])-180 # Negative because IMU is flipped
+        if(self.current_angle < 0):
+            self.current_angle = 360+self.current_angle
         if(self.arm_motors):
             if(self.enable_pid_arr):
                 if(self.enable_pid_arr[1]):
@@ -425,9 +428,9 @@ class myMotors():
 
     def kill_motors(self):
         self.set_single_motor("FR",0,1)
-        self.set_single_motor("FL",0,0)
+        self.set_single_motor("FL",0,1)
         self.set_single_motor("BR",0,1)
-        self.set_single_motor("BL",0,0)
+        self.set_single_motor("BL",0,1)
         
         self.desired_angle = self.current_angle
         self.desired_speed = 0
@@ -481,7 +484,7 @@ class myMotors():
         print("")
 
 
-def motor_thread(update_time):
+def motor_thread(update_time, motors):
     time_last_update = time.time()
     while True:
         if(time.time() - time_last_update > update_time):
@@ -496,7 +499,7 @@ if __name__ == "__main__":
     bno = BNO055(i2c)
     pca = PCA9685PWM(i2c)
     
-    angle_pid_p = 1.5
+    angle_pid_p = 0.5
     angle_pid_i = 0.1
     angle_pid = [angle_pid_p,angle_pid_i]
     #Create Motors Object
@@ -508,11 +511,11 @@ if __name__ == "__main__":
     motors.set_desired_speed(0)
     motors.set_desired_angle(motors.current_angle)
     
-    #Direct Control
-    #motors.set_single_motor("FR",100,1)
-    #motors.set_single_motor("FL",-100,0)
-    #motors.set_single_motor("BR",100,1)
-    #motors.set_single_motor("BL",-100,0)
+    # Direct Control
+    # motors.set_single_motor("FR",100,1)
+    # motors.set_single_motor("FL",-100,1)
+    # motors.set_single_motor("BR",100,1)
+    # motors.set_single_motor("BL",-100,1)
 
     update_time = 0.1 #seconds
     print_time = 1 #seconds
@@ -520,15 +523,25 @@ if __name__ == "__main__":
     
     time_start = time.time()
     time_last_print = time.time()
-    
-    motor_task = threading.Thread(target = motor_thread, args=(update_time), daemon=True)
-    motor_task.start()
-    
+    time_last_update = time.time()
+    # motor_task = threading.Thread(target = motor_thread, args=(update_time,motors), daemon=True)
+    # motor_task.start()
+
+    # go 90* turn right 90 degree turn left
+
+    #fo 
+
+    # 
+
+
     while 1:
         
         #Update Motors
-        motors.set_desired_speed(0)
-        motors.spin_motor(10)
+        #motors.set_desired_speed(0.1)
+        motors.set_desired_speed(10)
+        if(time.time() - time_last_update > update_time):
+            motors.update_motors()
+            time_last_update = time.time()
             
         #Print Info
         if(time.time() - time_last_print > print_time):
@@ -541,6 +554,12 @@ if __name__ == "__main__":
         if(rutime_break):
             break
         
+    # motors.set_desired_speed(0.1)
+    # motors.update_motors()
+    # time.sleep(1)
+    # motors.set_desired_speed(0)
+    # motors.update_motors()
+
         
     print("done")
     motors.kill_motors()  
