@@ -52,6 +52,7 @@ class RobotArm:
     MAX_PULSE = 2500
     STEP = 2
     DELAY = 0.05
+    ACTUATION_RANGE = 200
 
     def __init__(self, i2c_obj):
 
@@ -71,6 +72,7 @@ class RobotArm:
             if name in self.LARGE:
                 s = servo.Servo(
                     self.pca.channels[ch],
+                    actuation_range = 190, #Actuation Large servo only. default 180. maps onto min/max pulses < - - -
                     min_pulse=self.MIN_PULSE,
                     max_pulse=self.MAX_PULSE
                 )
