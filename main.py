@@ -61,7 +61,8 @@ def init_arm():
     arm.status()
 
     print('\n------ set_all (hybrid) --------')
-    arm.set_all({"base": 105,  "shoulder": 90,  "elbow": 150,"wrist": 0,  "hand": 180}) #cool up right pose WALLE mode
+    # arm.set_all({"base": 105,  "shoulder": 90,  "elbow": 150,"wrist": 0,  "hand": 180}) #cool up right pose WALLE mode
+    arm.move_to_pose('wide_view') #cool up right pose WALLE mode
     time.sleep(15)
 
 

@@ -287,7 +287,7 @@ class myMotors():
 
     def move_LR(self,direction):
                     #FR  #FL  #BR #BL
-        right_arr = [50, -50, -50,50]
+        right_arr = [-70, 60, 50,-50]
         left_arr = [50,-50,-50, 50]
         
         if(direction == "Right"):

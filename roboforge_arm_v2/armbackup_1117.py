@@ -36,20 +36,27 @@ class RobotArm:
         "hand": (0, 180)
     }
 
+    OPEN = 160
+    CLOSED = 50
     POSES = {
-        "default":      {"base": 105, "shoulder": 180, "elbow": 30,  "wrist": 0,  "hand": 180}, #solid
-        "focused":      {"base": 105,  "shoulder": 90,  "elbow": 180,"wrist": 0,  "hand": 180}, #solid
-        "wide_view":    {"base": 105, "shoulder": 180, "elbow": 45,  "wrist": 0,  "hand": 180}, #solid
-        "45_down":      {"base": 105,  "shoulder": 90,  "elbow": 100,"wrist": 0,  "hand": 180},
-        "reach_forward":{"base": 105,  "shoulder": 180, "elbow": 85, "wrist": 90, "hand": 180},
-        "safe":         {"base": 105,  "shoulder": 180, "elbow": 0,  "wrist": 180,"hand": 180},
-        "straight_up":  {"base": 105,  "shoulder": 90,  "elbow": 90, "wrist": 90,"hand": 90},
-        "elbow_L":      {"base": 105,  "shoulder": 90,  "elbow": 180,"wrist": 90,"hand": 180},
-        "wrist_L":      {"base": 105,  "shoulder": 90,  "elbow": 100,"wrist": 0,  "hand": 180}, #solid
+        "default":      {"base": 90, "shoulder": 175, "elbow": 0,  "wrist": 0,  "hand": OPEN}, #solid
+        "focused":      {"base": 90, "shoulder": 180, "elbow": 80,  "wrist":5 ,  "hand": OPEN}, #solid
+        "focused_closed":      {"base": 90, "shoulder": 180, "elbow": 80,  "wrist": 5,  "hand": CLOSED}, #solid
+        "default_closed":      {"base": 90, "shoulder": 180, "elbow": 0,  "wrist": 0,  "hand": CLOSED},
+        "fold_over":      {"base": 90, "shoulder": 90, "elbow": 0,  "wrist": 90,  "hand": CLOSED},
+        "fold_over_open":      {"base": 90, "shoulder": 90, "elbow": 0,  "wrist": 90,  "hand": OPEN},
+        "wide_view":    {"base": 90, "shoulder": 180, "elbow": 15,  "wrist": 0,  "hand": 180}, #solid
+        "wide_view_ish":    {"base": 90,  "shoulder": 90,  "elbow": 150,"wrist": 45,  "hand": 180}, #solid
+        "45_down":      {"base": 90,  "shoulder": 90,  "elbow": 100,"wrist": 0,  "hand": 180},
+        "reach_forward":{"base": 90,  "shoulder": 180, "elbow": 85, "wrist": 90, "hand": 180},
+        "safe":         {"base": 90,  "shoulder": 180, "elbow": 0,  "wrist": 180,"hand": 180},
+        "straight_up":  {"base": 90,  "shoulder": 90,  "elbow": 90, "wrist": 90,"hand": 90},
+        "elbow_L":      {"base": 90,  "shoulder": 90,  "elbow": 180,"wrist": 90,"hand": 180},
+        "wrist_L":      {"base": 90,  "shoulder": 90,  "elbow": 100,"wrist": 0,  "hand": 180}, #solid
     }
 
     MIN_PULSE = 500
-    MAX_PULSE = 2500
+    MAX_PULSE = 3000
     STEP = 2
     DELAY = 0.05
     ACTUATION_RANGE = 200
@@ -271,7 +278,19 @@ if __name__ == "__main__":
     arm.status()
     
     arm.move_to_pose("focused")
-    time.sleep(4)
+    time.sleep(2)
+    arm.status()
+    arm.move_to_pose("focused_closed")
+    time.sleep(2)
+    arm.status()
+    arm.move_to_pose("default_closed")
+    time.sleep(2)
+    arm.status()
+    arm.move_to_pose("fold_over")
+    time.sleep(2)
+    arm.status()
+    arm.move_to_pose("fold_over_open")
+    time.sleep(2)
     arm.status()
 
     # print("\n------ Move to XYZ (10, 5, 8) ------")
