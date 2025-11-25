@@ -273,11 +273,11 @@ class myMotors():
         self.angle_i_buff = 0
             
     def move(self,direction):
-        if(direction = "FWD"):
+        if(direction == "FWD"):
             self.desired_speed = 40
-        elif(direction = "REV"):
+        elif(direction == "REV"):
             self.desired_speed = -40
-        elif(direction = "STP"):
+        elif(direction == "STP"):
             self.desired_speed = 0
         else:
             print("Motor Direction No Valid")
@@ -286,16 +286,16 @@ class myMotors():
         self.set_desired_angle(self.current_angle + angle)
 
     def move_LR(self,direction):
-        
-        right_arr = [-100, 100, 100,-100]
-        left_arr = [100,-100,-100, 100]
+                    #FR  #FL  #BR #BL
+        right_arr = [50, -50, -50,50]
+        left_arr = [50,-50,-50, 50]
         
         if(direction == "Right"):
             motor_value_FR = right_arr[0]
             motor_value_FL = right_arr[1]
             motor_value_BR = right_arr[2]
             motor_value_BL = right_arr[3]
-        elif(diretion = "Left"):
+        elif(direction == "Left"):
             motor_value_FR = left_arr[0]
             motor_value_FL = left_arr[1]
             motor_value_BR = left_arr[2]
@@ -402,8 +402,7 @@ class myMotors():
         if((self.last_enable_pid != self.enable_pid)):
             self.kill_motors()
             
-        self.last_arm_motors = self.arm_motors
-        self.last_enable_pid_arr = self.enable_pid_arr
+        self.last_enable_pid_arr = self.enable_pid
         
         self.current_angle = self.none_check(self.current_angle,self.myIMU.get_angle()[0])                   
 
@@ -473,10 +472,10 @@ if __name__ == "__main__":
     motors = myMotors(bno,pca,angle_pid)
     
     #Auto Control # arm and initiallize
-    motors.set_arming_status(1)
-    motors.set_angle_pid_enable(1)
-    motors.set_desired_speed(0)
-    motors.set_desired_angle(motors.current_angle)
+ 
+    motors.set_pid_enable(0)
+    motors.move("STP")
+    motors.turn(0)
     
     #Direct Control
     #motors.set_single_motor("FR",100)
@@ -486,20 +485,19 @@ if __name__ == "__main__":
 
     update_time = 0.1 #seconds
     print_time = 1 #seconds
-    max_runtime = 30 #seconds
+    max_runtime = 3 #seconds
     
     time_start = time.time()
     time_last_print = time.time()
-    
-    motor_task = threading.Thread(target = motor_thread, args=(update_time), daemon=True)
-    motor_task.start()
+    time_last_update = time.time()
     
     while 1:
         
         #Update Motors
-        motors.set_desired_speed(0)
-        motors.spin_motor(10)
-            
+        motors.move_LR("Right")
+        if(time.time() - time_last_update > update_time):
+            motors.update_motors()
+            time_last_update = time.time()    
         #Print Info
         if(time.time() - time_last_print > print_time):
             motors.print_state_info()
