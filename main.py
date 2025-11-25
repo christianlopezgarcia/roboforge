@@ -73,13 +73,14 @@ def main():
         init_arm()
         while True:
             time.sleep(0.1)
-
+            
             # Safely copy the shared target dictionary
             with TARGET_INFO_LOCK:
                 targets = dict(GLOBAL_TARGET_INFO)
             # print("\ntargets", targets)
             if targets:
                 print("\n=== TARGETS FROM VISION THREAD ===")
+                MINIMUM_BLOCK = list(targets.keys())[0]
                 for name, info in targets.items():
                     print(f"{name}: "
                           f"X={info['X']:.2f} "
@@ -87,12 +88,18 @@ def main():
                           f"Z={info['Z']:.2f} "
                           f"D={info['D']:.2f} "
                           f"Conf={info['confidence']:.2f}", )
+                    
+                    diff = targets[MINIMUM_BLOCK]['D'] - info['D']
+                    if diff > 0:
+                        MINIMUM_BLOCK = name
+
                     # print(info['D'], type(info["D"]))
                     if info['D'] < .30 and arm.current_pose != "focused":
                         arm.move_to_pose("focused")
                 
-                # if arm.current_pose == "focused" and info['D'] < .30:
-                    # motors.move()
+                if arm.current_pose == "focused" and targets[MINIMUM_BLOCK]['D'] < .30:
+                    D_min = targets[MINIMUM_BLOCK]['D']
+                    print(D_min)
 
             # YOUR ARM / SERVO / ROBOT DECISIONS GO HERE
             # Example:
