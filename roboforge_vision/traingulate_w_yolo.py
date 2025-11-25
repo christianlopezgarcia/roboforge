@@ -203,7 +203,7 @@ def run():
 
         while True:
             with TARGET_INFO_LOCK:
-                GLOBAL_TARGET_INFO = {} 
+                GLOBAL_TARGET_INFO.clear() #previosuly was  empty dict {}
             
             first_match_found = False
 
@@ -292,7 +292,7 @@ def run():
                             while obj_key in GLOBAL_TARGET_INFO:
                                 obj_key = f"{detL['name']}_{counter}"
                                 counter += 1
-
+                            #print("[Vision] Updating GLOBAL_TARGET_INFO with a detection")
                             GLOBAL_TARGET_INFO[obj_key] = {
                                 'X': X, 'Y': Y, 'Z': Z, 'D': D, 
                                 'confidence': avg_conf,
@@ -404,6 +404,8 @@ STOP_FLAG = False
 
 def start_thread():
     """Starts run() inside a daemon thread so main.py can use it."""
+    # print("[Vision] loop alive")
+
     global STEREO_THREAD, STOP_FLAG
     if STEREO_THREAD is not None and STEREO_THREAD.is_alive():
         print("[Stereo] Already running.")

@@ -44,13 +44,14 @@ def run_motors_tmp():
     time.sleep(5)
 
 def teardown():
-    print("done")
-    motors.kill_motors()
-
     print('------ DEFAULT --------')
     arm.move_to_pose("default")
     time.sleep(0.5)
     arm.status()
+
+    print("done")
+    motors.kill_motors()
+
 
 
 def init_arm():
@@ -76,20 +77,20 @@ def main():
             # Safely copy the shared target dictionary
             with TARGET_INFO_LOCK:
                 targets = dict(GLOBAL_TARGET_INFO)
-
+            print("\ntargets", targets)
             if targets:
-                print("\n=== TARGETS FROM VISION THREAD ===")
+                print("=== TARGETS FROM VISION THREAD ===")
                 for name, info in targets.items():
                     print(f"{name}: "
                           f"X={info['X']:.2f} "
                           f"Y={info['Y']:.2f} "
                           f"Z={info['Z']:.2f} "
                           f"D={info['D']:.2f} "
-                          f"D={type(info['D'])} "
-                          f"D={info['D']} "
+                          f"type={type(info['D'])} "
+                          f"value={info['D']} "
                           f"Conf={info['confidence']:.2f}", )
                     # print(info['D'], type(info["D"]))
-                    if info['D'] < .24:
+                    if info['D'] < .30:
                         arm.move_to_pose("focused")
                     # motors.move()
 
@@ -107,7 +108,7 @@ def main():
         time.sleep(0.5)
         print("[Main] Done.")
         teardown()
-        time.sleep(5)
+        time.sleep(1)
 
 
 if __name__ == "__main__":
