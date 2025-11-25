@@ -77,21 +77,21 @@ def main():
             # Safely copy the shared target dictionary
             with TARGET_INFO_LOCK:
                 targets = dict(GLOBAL_TARGET_INFO)
-            print("\ntargets", targets)
+            # print("\ntargets", targets)
             if targets:
-                print("=== TARGETS FROM VISION THREAD ===")
+                print("\n=== TARGETS FROM VISION THREAD ===")
                 for name, info in targets.items():
                     print(f"{name}: "
                           f"X={info['X']:.2f} "
                           f"Y={info['Y']:.2f} "
                           f"Z={info['Z']:.2f} "
                           f"D={info['D']:.2f} "
-                          f"type={type(info['D'])} "
-                          f"value={info['D']} "
                           f"Conf={info['confidence']:.2f}", )
                     # print(info['D'], type(info["D"]))
-                    if info['D'] < .30:
+                    if info['D'] < .30 and arm.current_pose != "focused":
                         arm.move_to_pose("focused")
+                
+                # if arm.current_pose == "focused" and info['D'] < .30:
                     # motors.move()
 
             # YOUR ARM / SERVO / ROBOT DECISIONS GO HERE

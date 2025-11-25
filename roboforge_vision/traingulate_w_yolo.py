@@ -35,8 +35,12 @@ MODEL_PATH = '/home/clopezgarcia2/Desktop/roboforge/roboforge_vision/trained_yol
 RESOLUTION = (640, 480)         # (width, height)
 CAMERA_FRAME_RATE = 20
 CAMERA_FOURCC = cv2.VideoWriter_fourcc(*"MJPG")
-Y_THRESH_PX = 40                # Allowed vertical misalignment for valid stereo match
-K1_DISTORTION_FACTOR = -0.3    # -.2 to -.3
+Y_THRESH_PX = 40        # Allowed vertical misalignment for valid stereo match
+K1_DISTORTION_FACTOR = -0.3 # -.2 to -.3
+
+# --- New Display/Control Configuration ---
+ENABLE_DISPLAY = True
+DISPLAY_WAIT_MS = 1
 
 # ------------------------------
 # Global Variables for External Access
@@ -47,6 +51,10 @@ TARGET_INFO_LOCK = threading.Lock()
 # New global for saving the last frame
 LAST_FRAME_STITCHED = None 
 LAST_FRAME_LOCK = threading.Lock()
+
+# --- FIX: Initializing the Global STOP Flag ---
+STOP_FLAG = False # Use the global STOP_FLAG inside run() for clean exit
+# -----------------------------------------------
 
 # ------------------------------
 # CAMERA THREAD CLASS (Unchanged)
@@ -155,11 +163,12 @@ def frame_add_crosshairs(frame, x_c, y_c, size=15, color=(0,255,0), thickness=1)
 # ------------------------------
 
 def run():
-    # Declare globals here, inside the function, for modification access
+    # FIX: Declare globals here for modification access
     global GLOBAL_TARGET_INFO
     global TARGET_INFO_LOCK
     global LAST_FRAME_STITCHED
     global LAST_FRAME_LOCK
+    global STOP_FLAG
 
     try:
         # ------------------------------
@@ -186,31 +195,31 @@ def run():
         cx = pixel_width / 2.0
         cy = pixel_height / 2.0
         fx = FOCAL_LENGTH_PX
+        fy = FOCAL_LENGTH_PX # Defined for consistency
 
         time.sleep(0.5)
 
-        # Variables for main screen display
+        # Variables for display/logging
         X, Y, Z, D = 0.0, 0.0, 0.0, 0.0
-        x1m, y1m, x2m, y2m = 0.0, 0.0, 0.0, 0.0 
-        
-        # Logging setup
+        x1m, y1m, x2m, y2m = 0.0, 0.0, 0.0, 0.0
         last_log_time = time.time()
-        log_interval = 5.0 
+        log_interval = 5.0
         
         # ------------------------------
-        # Targeting Loop
+        # Targeting Loop (FAST CORE)
         # ------------------------------
 
-        while True:
-            with TARGET_INFO_LOCK:
-                GLOBAL_TARGET_INFO.clear() #previosuly was  empty dict {}
+        # FIX: Use STOP_FLAG in the loop condition for clean exit
+        while not STOP_FLAG:
             
-            first_match_found = False
+            # --- 1. Get Frames (non-blocking) ---
+            frame1 = ct1.next(black=True, wait=0.01)
+            frame2 = ct2.next(black=True, wait=0.01)
+            
+            frame1_display = frame1.copy()
+            frame2_display = frame2.copy()
 
-            frame1 = ct1.next(black=True, wait=1)
-            frame2 = ct2.next(black=True, wait=1)
-
-            # Run YOLO detection and collect centers (distorted pixels)
+            # --- 2. YOLO Detection (Heavy work) ---
             resultsL = model(frame1, verbose=False)
             resultsR = model(frame2, verbose=False)
             detsL = resultsL[0].boxes
@@ -218,7 +227,6 @@ def run():
 
             centers_left = []
             for det in detsL:
-                # ... (collect left detections and draw boxes) ...
                 conf = float(det.conf)
                 if conf < CONF_THRESH: continue
                 cls_id = int(det.cls)
@@ -227,11 +235,11 @@ def run():
                 xmid = float((xyxy[0] + xyxy[2]) / 2.0)
                 ymid = float((xyxy[1] + xyxy[3]) / 2.0)
                 centers_left.append({'name': name, 'x': xmid, 'y': ymid, 'conf': conf, 'box': xyxy, 'used': False})
-                cv2.rectangle(frame1, (int(xyxy[0]), int(xyxy[1])), (int(xyxy[2]), int(xyxy[3])), (0, 255, 0), 2)
+                if ENABLE_DISPLAY: # Only draw if displaying
+                    cv2.rectangle(frame1_display, (int(xyxy[0]), int(xyxy[1])), (int(xyxy[2]), int(xyxy[3])), (0, 255, 0), 2)
 
             centers_right = []
             for det in detsR:
-                # ... (collect right detections and draw boxes) ...
                 conf = float(det.conf)
                 if conf < CONF_THRESH: continue
                 cls_id = int(det.cls)
@@ -240,9 +248,15 @@ def run():
                 xmid = float((xyxy[0] + xyxy[2]) / 2.0)
                 ymid = float((xyxy[1] + xyxy[3]) / 2.0)
                 centers_right.append({'name': name, 'x': xmid, 'y': ymid, 'conf': conf, 'box': xyxy, 'used': False})
-                cv2.rectangle(frame2, (int(xyxy[0]), int(xyxy[1])), (int(xyxy[2]), int(xyxy[3])), (255, 0, 0), 2)
+                if ENABLE_DISPLAY: # Only draw if displaying
+                    cv2.rectangle(frame2_display, (int(xyxy[0]), int(xyxy[1])), (int(xyxy[2]), int(xyxy[3])), (255, 0, 0), 2)
             
-            # --- Stereo Matching and Triangulation for ALL objects ---
+            
+            # --- 3. Stereo Matching and Triangulation ---
+            
+            current_target_info = {}
+            first_match_found = False
+
             for detL in centers_left:
                 best_match = None
                 best_score = float('inf')
@@ -273,159 +287,184 @@ def run():
                                                  fx, camera_separation, cx, cy)
                     
                     if tri is not None:
-                        X, Y, Z = tri
+                        X_tri, Y_tri, Z_tri = tri
                         
-                        # Apply the empirical Z scaling factor if it is not 1.0
+                        # Apply the empirical Z scaling factor
                         if S_FACTOR != 1.0:
-                            X *= S_FACTOR
-                            Y *= S_FACTOR
-                            Z *= S_FACTOR
+                            X_tri *= S_FACTOR
+                            Y_tri *= S_FACTOR
+                            Z_tri *= S_FACTOR
 
-                        D = math.sqrt(X*X + Y*Y + Z*Z)
+                        D_tri = math.sqrt(X_tri**2 + Y_tri**2 + Z_tri**2)
                         avg_conf = (detL['conf'] + best_match['conf']) / 2.0
 
-                        # --- Update Global Dictionary ---
+                        # --- IMMEDIATELY UPDATE THE LOCAL DICT (FAST) ---
                         obj_key = detL['name']
                         counter = 1
+                        while obj_key in current_target_info:
+                            obj_key = f"{detL['name']}_{counter}"
+                            counter += 1
                         
-                        with TARGET_INFO_LOCK:
-                            while obj_key in GLOBAL_TARGET_INFO:
-                                obj_key = f"{detL['name']}_{counter}"
-                                counter += 1
-                            #print("[Vision] Updating GLOBAL_TARGET_INFO with a detection")
-                            GLOBAL_TARGET_INFO[obj_key] = {
-                                'X': X, 'Y': Y, 'Z': Z, 'D': D, 
-                                'confidence': avg_conf,
-                                'ts': time.time()
-                            }
-
+                        current_target_info[obj_key] = {
+                            'X': X_tri, 'Y': Y_tri, 'Z': Z_tri, 'D': D_tri,
+                            'confidence': avg_conf,
+                            'ts': time.time()
+                        }
+                        
                         # --- Update Single Target Display Variables ---
                         if not first_match_found:
-                            X, Y, Z, D = X, Y, Z, D
-                            # Display crosshairs on the ORIGINAL (distorted) detected position
-                            x1m, y1m = detL['x'], detL['y'] 
+                            X, Y, Z, D = X_tri, Y_tri, Z_tri, D_tri
+                            x1m, y1m = detL['x'], detL['y']
                             x2m, y2m = best_match['x'], best_match['y']
                             first_match_found = True
-                            
-                        # Overlay distance on target boxes
-                        txt = f"{obj_key}: {D:.2f} m"
-                        cv2.putText(frame1, txt, (int(detL['x']) - 40, int(detL['y']) - 20),
-                                    cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0,255,255), 2)
-                        cv2.putText(frame2, txt, (int(best_match['x']) - 40, int(best_match['y']) - 20),
-                                    cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0,255,255), 2)
+                        
+                        # Overlay distance on target boxes (only if displaying)
+                        if ENABLE_DISPLAY:
+                            txt = f"{obj_key}: {D_tri:.2f} m"
+                            cv2.putText(frame1_display, txt, (int(detL['x']) - 40, int(detL['y']) - 20),
+                                        cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0,255,255), 2)
+                            cv2.putText(frame2_display, txt, (int(best_match['x']) - 40, int(best_match['y']) - 20),
+                                        cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0,255,255), 2)
 
-            # --- ROBUST 5-SECOND LOGGING ---
+            
+            # --- 4. ATOMICALLY UPDATE GLOBAL DATA (Crucial for external access) ---
+            # This section MUST be fast to minimize the lock time.
+            with TARGET_INFO_LOCK:
+                # Clear the old data and insert the fresh set atomically
+                GLOBAL_TARGET_INFO.clear()
+                GLOBAL_TARGET_INFO.update(current_target_info)
+
+
+            # --- 5. ROBUST 5-SECOND LOGGING ---
             if time.time() - last_log_time >= log_interval:
-                with TARGET_INFO_LOCK:
-                    targets = copy.deepcopy(GLOBAL_TARGET_INFO)
-                
-                if targets:
-                    print(f"\n--- {time.strftime('%H:%M:%S')} Targets Detected (K1={K1}, X, Y, Z, D in meters) ---")
-                    for key, info in targets.items():
-                        print(f"  {key:<15} | X:{info['X']:6.2f} Y:{info['Y']:6.2f} Z:{info['Z']:6.2f} D:{info['D']:6.2f} | Conf:{info['confidence']:.2f}")
-                    sys.stdout.flush()
+                # if current_target_info:
+                #     print(f"\n--- {time.strftime('%H:%M:%S')} Targets Detected (K1={K1}, X, Y, Z, D in meters) ---")
+                #     for key, info in current_target_info.items():
+                #         print(f"  {key:<15} | X:{info['X']:6.2f} Y:{info['Y']:6.2f} Z:{info['Z']:6.2f} D:{info['D']:6.2f} | Conf:{info['confidence']:.2f}")
+                #     sys.stdout.flush()
                 last_log_time = time.time()
 
 
-            if not first_match_found:
-                # Reset display coordinates if no match was found
-                X, Y, Z, D = 0.0, 0.0, 0.0, 0.0
-                x1m, y1m, x2m, y2m = 0.0, 0.0, 0.0, 0.0
+            # --- 6. DISPLAY/VISUALIZATION (Optional/Slower section) ---
+            if ENABLE_DISPLAY:
+                if not first_match_found:
+                    X, Y, Z, D = 0.0, 0.0, 0.0, 0.0
+                    x1m, y1m, x2m, y2m = 0.0, 0.0, 0.0, 0.0
 
-            # Display camera centers and coordinate data for the first target
-            frame_add_crosshairs(frame1, cx, cy)
-            frame_add_crosshairs(frame2, cx, cy)
+                frame_add_crosshairs(frame1_display, cx, cy)
+                frame_add_crosshairs(frame2_display, cx, cy)
 
-            fps1 = int(ct1.current_frame_rate) 
-            fps2 = int(ct2.current_frame_rate)
-            text = 'X: {:3.2f}m\nY: {:3.2f}m\nZ: {:3.2f}m\nD: {:3.2f}m\nFPS: {}/{}'.format(X,Y,Z,D,fps1,fps2)
-            lineloc = 0
-            lineheight = 30
-            for t in text.split('\n'):
-                lineloc += lineheight
-                cv2.putText(frame1, t, (10,lineloc), cv2.FONT_HERSHEY_PLAIN, 1.5, (0,255,0), 1, cv2.LINE_AA, False)
+                fps1 = int(ct1.current_frame_rate)
+                fps2 = int(ct2.current_frame_rate)
+                text = 'X: {:3.2f}m\nY: {:3.2f}m\nZ: {:3.2f}m\nD: {:3.2f}m\nFPS: {}/{}'.format(X,Y,Z,D,fps1,fps2)
+                lineloc = 0
+                lineheight = 30
+                for t in text.split('\n'):
+                    lineloc += lineheight
+                    cv2.putText(frame1_display, t, (10,lineloc), cv2.FONT_HERSHEY_PLAIN, 1.5, (0,255,0), 1, cv2.LINE_AA, False)
 
-            # Display crosshairs for the first matched target (uses original distorted pixel for screen drawing)
-            if x1m != 0.0:
-                frame_add_crosshairs(frame1,x1m,y1m,48,color=(0,255,255))
-                frame_add_crosshairs(frame2,x2m,y2m,48,color=(0,255,255))
+                if x1m != 0.0:
+                    frame_add_crosshairs(frame1_display,x1m,y1m,48,color=(0,255,255))
+                    frame_add_crosshairs(frame2_display,x2m,y2m,48,color=(0,255,255))
 
-            # Display frame
-            cv2.imshow("Left Camera 1 - YOLO",frame1)
-            cv2.imshow("Right Camera 2 - YOLO",frame2)
+                # Display frame
+                cv2.imshow("Left Camera 1 - YOLO",frame1_display)
+                cv2.imshow("Right Camera 2 - YOLO",frame2_display)
 
-            # Save the stitched frame
-            stitched_frame = np.concatenate((frame1, frame2), axis=1)
-            with LAST_FRAME_LOCK:
-                LAST_FRAME_STITCHED = stitched_frame.copy()
+                # Save the stitched frame
+                stitched_frame = np.concatenate((frame1_display, frame2_display), axis=1)
+                with LAST_FRAME_LOCK:
+                    LAST_FRAME_STITCHED = stitched_frame.copy()
 
-            # Detect keys
-            key = cv2.waitKey(1) & 0xFF
-            if cv2.getWindowProperty('Left Camera 1 - YOLO',cv2.WND_PROP_VISIBLE) < 1 or \
-               cv2.getWindowProperty('Right Camera 2 - YOLO',cv2.WND_PROP_VISIBLE) < 1 or \
-               key == ord('q'):
-                break
-            elif key != 255:
-                print('KEY PRESS:',[chr(key)])
+                # Detect keys (slow operation)
+                key = cv2.waitKey(DISPLAY_WAIT_MS) & 0xFF
+                if cv2.getWindowProperty('Left Camera 1 - YOLO',cv2.WND_PROP_VISIBLE) < 1 or \
+                   cv2.getWindowProperty('Right Camera 2 - YOLO',cv2.WND_PROP_VISIBLE) < 1 or \
+                   key == ord('q'):
+                    STOP_FLAG = True # Signal exit
+                elif key != 255:
+                    print('KEY PRESS:',[chr(key)])
+            else:
+                # If display is disabled, yield CPU time
+                time.sleep(0.01)
 
-    except:
+    except Exception:
         print(traceback.format_exc())
 
     finally:
-        # --- IMAGE SAVE ON QUIT ---
-        if LAST_FRAME_STITCHED is not None:
-            # Add grid for visualization before saving
-            for x in range(0, LAST_FRAME_STITCHED.shape[1], 50): 
-                cv2.line(LAST_FRAME_STITCHED, (x, 0), (x, LAST_FRAME_STITCHED.shape[0]), (255, 255, 255), 1)
-            for y in range(0, LAST_FRAME_STITCHED.shape[0], 50):
-                cv2.line(LAST_FRAME_STITCHED, (0, y), (LAST_FRAME_STITCHED.shape[1], y), (255, 255, 255), 1)
-                
-            filename = f"stereo_capture_{time.strftime('%Y%m%d_%H%M%S')}.png"
-            cv2.imwrite(filename, LAST_FRAME_STITCHED)
-            print(f"\nSaved last frame with pixel grid to: {filename}")
-
-        # Close all
-        try: ct1.stop() 
+        # --- Cleanup ---
+        if ENABLE_DISPLAY:
+            if LAST_FRAME_STITCHED is not None:
+                # Add grid for visualization before saving
+                for x in range(0, LAST_FRAME_STITCHED.shape[1], 50):
+                    cv2.line(LAST_FRAME_STITCHED, (x, 0), (x, LAST_FRAME_STITCHED.shape[0]), (255, 255, 255), 1)
+                for y in range(0, LAST_FRAME_STITCHED.shape[0], 50):
+                    cv2.line(LAST_FRAME_STITCHED, (0, y), (LAST_FRAME_STITCHED.shape[1], y), (255, 255, 255), 1)
+                    
+                filename = f"stereo_capture_{time.strftime('%Y%m%d_%H%M%S')}.png"
+                cv2.imwrite(filename, LAST_FRAME_STITCHED)
+                print(f"\nSaved last frame with pixel grid to: {filename}")
+                cv2.destroyAllWindows()
+            
+        try: ct1.stop()
         except: pass
-        try: ct2.stop() 
+        try: ct2.stop()
         except: pass
-        cv2.destroyAllWindows()
         print('DONE')
 
 
 # ------------------------------
-# THREAD SUPPORT FOR MAIN PROGRAM
+# THREAD SUPPORT FOR MAIN PROGRAM (FIXED)
 # ------------------------------
 
-import threading
-
 STEREO_THREAD = None
-STOP_FLAG = False
 
-def start_thread():
-    """Starts run() inside a daemon thread so main.py can use it."""
-    # print("[Vision] loop alive")
-
+# FIX: Added a wait time parameter to ensure the main script doesn't read 
+# the dictionary before the first detection cycle is complete.
+def start_thread(wait_for_first_frame=1.0):
+    """
+    Starts run() inside a daemon thread and waits a short time to ensure the 
+    first detection cycle is complete before returning.
+    """
     global STEREO_THREAD, STOP_FLAG
     if STEREO_THREAD is not None and STEREO_THREAD.is_alive():
         print("[Stereo] Already running.")
         return
 
     STOP_FLAG = False
-
+    
     def runner():
-        run()  # your original run() loops until STOP_FLAG or 'q'
+        run()
 
     STEREO_THREAD = threading.Thread(target=runner, daemon=True)
     STEREO_THREAD.start()
     print("[Stereo] Started thread.")
+    
+    # FIX: Wait briefly for the thread to process the first frame.
+    if wait_for_first_frame > 0:
+        print(f"[Stereo] Waiting {wait_for_first_frame}s for initial detection to populate GLOBAL_TARGET_INFO.")
+        time.sleep(wait_for_first_frame)
+        print("[Stereo] Initial wait complete.")
 
 
 def stop_thread():
-    """Signals run() to exit cleanly."""
-    global STOP_FLAG
+    """Signals run() to exit cleanly and waits for the thread to join."""
+    global STOP_FLAG, STEREO_THREAD
+    if STEREO_THREAD is None or not STEREO_THREAD.is_alive():
+        print("[Stereo] Thread not active.")
+        return
+    
     STOP_FLAG = True
     print("[Stereo] Stop requested.")
+
+    # Wait for the thread to complete its cleanup
+    STEREO_THREAD.join(timeout=2.0)
+    
+    if STEREO_THREAD.is_alive():
+        print("[Stereo] Warning: Thread did not stop cleanly.")
+    else:
+        print("[Stereo] Thread stopped successfully.")
+    STEREO_THREAD = None
 
 
 if __name__ == '__main__':

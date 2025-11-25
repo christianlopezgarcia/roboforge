@@ -62,6 +62,7 @@ class RobotArm:
 
         self.current = {}
         self.large = {}
+        self.current_pose = None
 
         # initialize all servos
         for name, ch in self.CHANNELS.items():
@@ -134,6 +135,7 @@ class RobotArm:
 
     def move_to_pose(self, name):
         print(f"Pose: {name}")
+        self.current_pose = name
         # if name == "default":
         #     # Step 1 — tuck small joints instantly
         #     self.set_joint("hand", 180)
