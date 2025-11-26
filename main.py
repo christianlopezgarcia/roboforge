@@ -171,16 +171,16 @@ def main():
                     if info['D'] < targets[MINIMUM_BLOCK]['D']:
                         MINIMUM_BLOCK = name
 
-                    # Enter focused mode if close
-                    if info['D'] < .30 and arm.current_pose != "focused":
-                        arm.move_to_pose("focused")
-                        time.sleep(0.5)
+                # Enter focused mode if close
+                if info['D'] < .30 and arm.current_pose != "4_21_view":
+                    arm.move_to_pose("4_21_view")
+                    time.sleep(0.5)
 
                 # -----------------------------------------------------
                 # >>> ULTRASONIC START TRIGGER <<<
                 # After focused AND close (< 0.30)
                 # -----------------------------------------------------
-                if arm.current_pose == "focused" and targets[MINIMUM_BLOCK]['D'] < .30:
+                if arm.current_pose == "4_21_view" and targets[MINIMUM_BLOCK]['D'] < .30:
                     D_min = targets[MINIMUM_BLOCK]['D']
                     print(f"Closest distance: {D_min:.3f}")
 
@@ -191,10 +191,11 @@ def main():
                 with ULTRASONIC_INFO_LOCK:
                     uinfo = dict(GLOBAL_ULTRASONIC_INFO)
 
-                for name, info in uinfo.items():
-                    print(f"ULTRA {name}: "
-                            f"{info['US_distance_cm']:.2f} cm "
-                            f"(ts={info['ts']:.2f})")
+                print(uinfo)
+                # for name, info in uinfo.items():
+                #     print(f"ULTRA {name}: "
+                #             f"{info['US_distance_cm']:.2f} cm "
+                #             f"(ts={info['ts']:.2f})",end='\r', flush=True)
 
     except KeyboardInterrupt:
         print("\n[Main] Keyboard interrupt — shutting down.")
