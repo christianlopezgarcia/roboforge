@@ -49,6 +49,7 @@ def Ultrasonic(sample_rate, echo_pin, trigger_pin):
 # ------------------------------
 
 import threading
+ULTRASONIC_THREAD = None
 
 def start_thread(sample_rate, echo_pin, trigger_pin):
     """Starts Urltrasonic() inside a daemon thread so main.py can use it."""

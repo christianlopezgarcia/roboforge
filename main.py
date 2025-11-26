@@ -6,13 +6,27 @@ import board
 
 from roboforge_arm_v2.armbackup_1117 import RobotArm
 from roboforge_motors.MotorControl import myMotors, BNO055, PCA9685PWM
-# /home/clopezgarcia2/Desktop/roboforge/roboforge_vision/traingulate_w_yolo.py
+
+# Stereo vision
 from roboforge_vision.traingulate_w_yolo import (
     start_thread,
     stop_thread,
     GLOBAL_TARGET_INFO,
     TARGET_INFO_LOCK
 )
+
+# >>> ULTRASONIC ADD >>>
+from Ultrasonic import (
+    start_thread as start_ultra_thread,
+    stop_thread as stop_ultra_thread,
+    GLOBAL_ULTRASONIC_INFO,
+    ULTRASONIC_INFO_LOCK
+)
+# <<< ULTRASONIC END <<<
+
+# ----------------------------------------------------
+# INIT HARDWARE
+# ----------------------------------------------------
 
 i2c = busio.I2C(board.SCL, board.SDA)
 arm = RobotArm(i2c)
@@ -43,33 +57,96 @@ def run_motors_tmp():
     # motors.set_desired_speed(10)
     time.sleep(5)
 
+# ----------------------------------------------------
+# ARM INIT / TEARDOWN
+# ----------------------------------------------------
+
 def teardown():
     print('------ DEFAULT --------')
     arm.move_to_pose("default")
     time.sleep(0.5)
-    arm.status()
+    
 
     print("done")
     motors.kill_motors()
-
-
 
 def init_arm():
     print('------ DEFAULT --------')
     arm.move_to_pose("default")
     time.sleep(0.5)
-    arm.status()
-
-    print('\n------ set_all (hybrid) --------')
-    # arm.set_all({"base": 105,  "shoulder": 90,  "elbow": 150,"wrist": 0,  "hand": 180}) #cool up right pose WALLE mode
-    arm.move_to_pose('wide_view') #cool up right pose WALLE mode
+    
+    print('\n------ WIDE VIEW --------')
+    arm.move_to_pose('21_84_cm_view')  
     time.sleep(15)
 
+def five_cm_pickup():
+    arm.move_to_pose("5cm")
+    time.sleep(1)
+
+    arm.move_to_pose("5cm_closed")
+    time.sleep(1)
+    
+    arm.move_to_pose("5cm_30r_closed")
+    time.sleep(1)
+    
+    arm.move_to_pose("default_closed",reverse =True)
+    time.sleep(1)
+    
+    arm.move_to_pose("fold_over",reverse = True)
+    time.sleep(1)
+    
+    arm.move_to_pose("fold_over_open")
+    time.sleep(1)
+    
+
+def ten_cm_pickup():
+    arm.move_to_pose("10_cm")
+    time.sleep(1)
+    arm.move_to_pose("10_cm_closed")
+    time.sleep(1)
+    arm.move_to_pose("10_cm_30r_closed")
+    time.sleep(1)
+    arm.move_to_pose("fold_over",reverse =True)
+    time.sleep(1)
+    
+    arm.move_to_pose("fold_over_open")
+    time.sleep(1)
+    arm.move_to_pose("default")
+    
+
+def eight_cm_pickup():
+    arm.move_to_pose("8cm")
+    time.sleep(1)
+    arm.move_to_pose("8cm_closed")
+    time.sleep(1)
+    arm.move_to_pose("8cm_30r_closed")
+    time.sleep(1)
+    arm.move_to_pose("fold_over",reverse =True)
+    time.sleep(1)
+    
+    arm.move_to_pose("fold_over_open")
+    time.sleep(1)
+    arm.move_to_pose("default")
+    
+
+distance_to_move = {5: five_cm_pickup, 8: eight_cm_pickup, 10: ten_cm_pickup}
+
+
+# ----------------------------------------------------
+# MAIN LOOP
+# ----------------------------------------------------
 
 def main():
     print("[Main] Starting stereo vision thread...")
     start_thread()
 
+    ultrasonic_running = True   # >>> NEW FLAG <<<
+
+    # Ultrasonic settings
+    sample_rate = 100
+    echo_pin = 17
+    trigger_pin = 27
+    start_ultra_thread(sample_rate, echo_pin, trigger_pin)
     try:
         init_arm()
         while True:
@@ -88,35 +165,49 @@ def main():
                           f"Y={info['Y']:.2f} "
                           f"Z={info['Z']:.2f} "
                           f"D={info['D']:.2f} "
-                          f"Conf={info['confidence']:.2f}", )
-                    
-                    diff = targets[MINIMUM_BLOCK]['D'] - info['D']
-                    if diff > 0:
+                          f"Conf={info['confidence']:.2f}")
+
+                    # Update nearest object
+                    if info['D'] < targets[MINIMUM_BLOCK]['D']:
                         MINIMUM_BLOCK = name
 
-                    # print(info['D'], type(info["D"]))
+                    # Enter focused mode if close
                     if info['D'] < .30 and arm.current_pose != "focused":
                         arm.move_to_pose("focused")
-                
+                        time.sleep(0.5)
+
+                # -----------------------------------------------------
+                # >>> ULTRASONIC START TRIGGER <<<
+                # After focused AND close (< 0.30)
+                # -----------------------------------------------------
                 if arm.current_pose == "focused" and targets[MINIMUM_BLOCK]['D'] < .30:
                     D_min = targets[MINIMUM_BLOCK]['D']
-                    print(D_min)
+                    print(f"Closest distance: {D_min:.3f}")
 
-            # YOUR ARM / SERVO / ROBOT DECISIONS GO HERE
-            # Example:
-            # if 'cube' in targets:
-            #     print("Cube found, moving arm...")
+
+                # -----------------------------------------------------
+                # >>> READ ULTRASONIC (if running) <<<
+                # -----------------------------------------------------
+                with ULTRASONIC_INFO_LOCK:
+                    uinfo = dict(GLOBAL_ULTRASONIC_INFO)
+
+                for name, info in uinfo.items():
+                    print(f"ULTRA {name}: "
+                            f"{info['US_distance_cm']:.2f} cm "
+                            f"(ts={info['ts']:.2f})")
 
     except KeyboardInterrupt:
         print("\n[Main] Keyboard interrupt — shutting down.")
 
-
     finally:
         stop_thread()
+        if ultrasonic_running:
+            stop_ultra_thread()
+
         time.sleep(0.5)
-        print("[Main] Done.")
         teardown()
         time.sleep(1)
+        print("[Main] Done.")
 
 
 if __name__ == "__main__":

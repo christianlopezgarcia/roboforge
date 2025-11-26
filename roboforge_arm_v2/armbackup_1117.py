@@ -37,16 +37,37 @@ class RobotArm:
     }
 
     OPEN = 160
-    CLOSED = 50
+    CLOSED = 40
     POSES = {
         "default":      {"base": 90, "shoulder": 175, "elbow": 0,  "wrist": 0,  "hand": OPEN}, #solid
-        "focused":      {"base": 90, "shoulder": 180, "elbow": 80,  "wrist":5 ,  "hand": OPEN}, #solid
-        "focused_closed":      {"base": 90, "shoulder": 180, "elbow": 80,  "wrist": 5,  "hand": CLOSED}, #solid
         "default_closed":      {"base": 90, "shoulder": 180, "elbow": 0,  "wrist": 0,  "hand": CLOSED},
+
+        "focused":              {"base": 90, "shoulder": 180, "elbow": 80,  "wrist":5 ,  "hand": OPEN}, #solid
+        "focused_closed":       {"base": 90, "shoulder": 180, "elbow": 80,  "wrist": 5,  "hand": CLOSED}, #solid
+        
+        "5cm":                  {"base": 90, "shoulder": 180, "elbow": 80,  "wrist": 5,  "hand": OPEN}, #solid
+        "5cm_closed":           {"base": 90, "shoulder": 180, "elbow": 80,  "wrist": 5,  "hand": CLOSED}, #solid
+        "5cm_30r_closed":       {"base": 60, "shoulder": 180, "elbow": 80,  "wrist": 5,  "hand": CLOSED}, 
+
+        "8cm":                  {"base": 90, "shoulder": 180, "elbow": 80,  "wrist": 25,  "hand": OPEN}, #solid
+        "8cm_closed":           {"base": 90, "shoulder": 180, "elbow": 80,  "wrist": 25,  "hand": CLOSED}, #solid
+        "8cm_30r_closed":       {"base": 60, "shoulder": 180, "elbow": 80,  "wrist": 25,  "hand": CLOSED}, 
+
+        "10_cm":                {"base": 90,  "shoulder": 200, "elbow": 85, "wrist": 45, "hand": OPEN}, #solid
+        "10_cm_closed":         {"base": 90,  "shoulder": 200, "elbow": 85, "wrist": 45, "hand": CLOSED}, #solid
+        "10_cm_30r_closed":     {"base": 60,  "shoulder": 200, "elbow": 85, "wrist": 45, "hand": CLOSED}, #solid
+
+        
         "fold_over":      {"base": 90, "shoulder": 90, "elbow": 0,  "wrist": 90,  "hand": CLOSED},
         "fold_over_open":      {"base": 90, "shoulder": 90, "elbow": 0,  "wrist": 90,  "hand": OPEN},
+        
         "wide_view":    {"base": 90, "shoulder": 180, "elbow": 15,  "wrist": 0,  "hand": 180}, #solid
-        "wide_view_ish":    {"base": 90,  "shoulder": 90,  "elbow": 150,"wrist": 45,  "hand": 180}, #solid
+        "narrow_view":    {"base": 90,  "shoulder": 90,  "elbow": 150,"wrist": 45,  "hand": 180}, #solid
+
+        "21_84_cm_view":    {"base": 90, "shoulder": 180, "elbow": 15,  "wrist": 0,  "hand": 180}, #solid
+        "4_21_view":    {"base": 90, "shoulder": 180, "elbow": 15,  "wrist": 0,  "hand": 180}, #solid
+        "narrow_view":    {"base": 90,  "shoulder": 90,  "elbow": 150,"wrist": 45,  "hand": 180}, #solid
+
         "45_down":      {"base": 90,  "shoulder": 90,  "elbow": 100,"wrist": 0,  "hand": 180},
         "reach_forward":{"base": 90,  "shoulder": 180, "elbow": 85, "wrist": 90, "hand": 180},
         "safe":         {"base": 90,  "shoulder": 180, "elbow": 0,  "wrist": 180,"hand": 180},
@@ -130,19 +151,35 @@ class RobotArm:
             return
 
         # ---- SMALL SERVOS (instant) ----
+
         ch = self.CHANNELS[name]
-        self.kit.servo[ch].angle = target
+        current = float(self.kit.servo[ch].angle)
+        # self.kit.servo[ch].angle = target
+        direction = 1 if target > current else -1
+
+        # fixed stepping that never skips the final target
+        a = current
+        while (direction == 1 and a < target) or (direction == -1 and a > target):
+            a += direction * self.STEP
+            if (direction == 1 and a > target) or (direction == -1 and a < target):
+                a = target
+            self.kit.servo[ch].angle = a
+            time.sleep(.01)
+
         self.current[name] = float(self.kit.servo[ch].angle)  # REAL angle
 
     def add_angle(self, name, delta):
         self.set_joint(name, self.current[name] + delta)
 
-    def set_all(self, mapping):
-        for j in ["base", "shoulder", "elbow", "wrist", "hand"]:
+    def set_all(self, mapping, reverse=False):
+        order = ["base", "shoulder", "elbow", "wrist", "hand"]
+        if reverse:
+            order = order[::-1]
+        for j in order:
             if j in mapping:
                 self.set_joint(j, mapping[j])
 
-    def move_to_pose(self, name):
+    def move_to_pose(self, name, reverse = False):
         print(f"Pose: {name}")
         self.current_pose = name
         # if name == "default":
@@ -162,7 +199,7 @@ class RobotArm:
 
         #     # self.status()
         #     return 
-        self.set_all(self.POSES[name])
+        self.set_all(self.POSES[name], reverse)
 
     def status(self):
         print("Angles:", self.current)
@@ -265,7 +302,7 @@ if __name__ == "__main__":
     # time.sleep(0.5)
     # arm.status()
 
-    print('\n------ set_all (hybrid) --------')
+    # print('\n------ set_all (hybrid) --------')
     # arm.set_all({"base": 105,  "shoulder": 90,  "elbow": 150,"wrist": 0,  "hand": 180}) #cool up right pose WALLE mode
     # time.sleep(15)
     # # arm.set_all({"hand": 180,"wrist": 0,"elbow": 0,"shoulder": 180, "base": 90,})
@@ -277,21 +314,24 @@ if __name__ == "__main__":
     time.sleep(4)
     arm.status()
     
-    arm.move_to_pose("focused")
-    time.sleep(2)
-    arm.status()
-    arm.move_to_pose("focused_closed")
-    time.sleep(2)
-    arm.status()
-    arm.move_to_pose("default_closed")
-    time.sleep(2)
-    arm.status()
-    arm.move_to_pose("fold_over")
-    time.sleep(2)
-    arm.status()
-    arm.move_to_pose("fold_over_open")
-    time.sleep(2)
-    arm.status()
+    # arm.move_to_pose("5cm")
+    # time.sleep(2)
+    # arm.status()
+    # arm.move_to_pose("5cm_closed")
+    # time.sleep(2)
+    # arm.status()
+    # arm.move_to_pose("5cm_30r_closed")
+    # time.sleep(2)
+    # arm.status()
+    # arm.move_to_pose("default_closed",reverse =True)
+    # time.sleep(2)
+    # arm.status()
+    # arm.move_to_pose("fold_over")
+    # time.sleep(2)
+    # arm.status()
+    # arm.move_to_pose("fold_over_open")
+    # time.sleep(2)
+    # arm.status()
 
     # print("\n------ Move to XYZ (10, 5, 8) ------")
     # result = arm.move_xyz(10, 0, -6)
@@ -299,6 +339,40 @@ if __name__ == "__main__":
     # print("IK Angles:", result)
     # arm.status()
 
-    print('\n ------Default------')
-    arm.move_to_pose("default")
-    arm.status()
+    # print('\n ------Default------')
+    # arm.move_to_pose("default")
+    # arm.status()
+
+    # arm.move_to_pose("10_cm")
+    # time.sleep(1)
+    # arm.move_to_pose("10_cm_closed")
+    # time.sleep(1)
+    # arm.move_to_pose("10_cm_30r_closed")
+    # time.sleep(1)
+    # arm.move_to_pose("fold_over",reverse =True)
+    # time.sleep(2)
+    # arm.status()
+    # arm.move_to_pose("fold_over_open")
+    # time.sleep(2)
+    # arm.move_to_pose("default")
+    # arm.status()
+
+    # print('\n ------Default------')
+    # arm.move_to_pose("default")
+    # arm.status()
+
+    # arm.move_to_pose("8cm")
+    # time.sleep(1)
+    # arm.move_to_pose("8cm_closed")
+    # time.sleep(1)
+    # arm.move_to_pose("8cm_30r_closed")
+    # time.sleep(1)
+    # arm.move_to_pose("fold_over",reverse =True)
+    # time.sleep(2)
+    # arm.status()
+    # arm.move_to_pose("fold_over_open")
+    # time.sleep(2)
+    # arm.move_to_pose("default")
+    # arm.status()
+
+

@@ -34,7 +34,7 @@ if __name__ == '__main__':
                         f"={info['ts']:.2f} "
                 )
 
-            if(time.time() > start_time + 3):
+            if(time.time() > start_time + 60):
                 print(" --------------------------------------------- STOP THREAD -------------------------")
                 stop_thread()
                 break

@@ -494,20 +494,27 @@ if __name__ == "__main__":
     while 1:
         
         #Update Motors
-        motors.move_LR("Right")
-        if(time.time() - time_last_update > update_time):
-            motors.update_motors()
-            time_last_update = time.time()    
-        #Print Info
-        if(time.time() - time_last_print > print_time):
-            motors.print_state_info()
-            motors.print_pid_info()
-            time_last_print = time.time()
+        motors.move("FWD")
+        motors.update_motors()
+        time.sleep(15)
+        motors.move("STP")
+        motors.update_motors()
+
+        
+        # # motors.move_LR("Right")
+        # if(time.time() - time_last_update > update_time):
+        #     motors.update_motors()
+        #     time_last_update = time.time()    
+        # #Print Info
+        # if(time.time() - time_last_print > print_time):
+        #     motors.print_state_info()
+        #     motors.print_pid_info()
+        #     time_last_print = time.time()
             
-        #Break out
-        rutime_break = ((time.time() - time_start) > max_runtime)   
-        if(rutime_break):
-            break
+        # #Break out
+        # rutime_break = ((time.time() - time_start) > max_runtime)   
+        # if(rutime_break):
+        break
         
         
     print("done")
