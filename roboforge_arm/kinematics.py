@@ -142,10 +142,16 @@ def kin_inv(x_des, y_des):
 def wrist_map(ping):
     # just because the arm angles are all measured in mm
     x = ping * 10
+    max_dist = 90 # just a guess right now. could be 8.5 - 9.5 < ------
     min_dist = 50
     grab_length = 90
-    if x < 50:
-        x = 50
+
+    #clamp em
+    if x > max_dist:
+        x = max_dist
+    if x < min_dist:
+        x = min_dist
+
     wrist_th = np.arcsin((x-min_dist)/grab_length)
     wrist_th = np.rad2deg(wrist_th)
     
