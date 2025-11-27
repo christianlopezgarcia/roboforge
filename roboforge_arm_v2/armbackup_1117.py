@@ -37,7 +37,7 @@ class RobotArm:
     }
 
     OPEN = 160
-    CLOSED = 40
+    CLOSED = 40 #20 gave wierd issues good luck kevin
     POSES = {
         "default":             {"base": 90, "shoulder": 175, "elbow": 0,  "wrist": 0,  "hand": OPEN}, #solid
         "default_closed":      {"base": 90, "shoulder": 180, "elbow": 0,  "wrist": 0,  "hand": CLOSED},

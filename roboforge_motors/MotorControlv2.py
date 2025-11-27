@@ -245,7 +245,7 @@ class myMotors():
     angle_total_buff = 0
         
     angle_p_limit = 10
-    angle_i_limit = 2
+    angle_i_limit = 1
     angle_total_limit = angle_p_limit + angle_i_limit
     
     ################ State Info ##################
@@ -274,9 +274,9 @@ class myMotors():
             
     def move(self,direction):
         if(direction == "FWD"):
-            self.desired_speed = 25
+            self.desired_speed = 26
         elif(direction == "REV"):
-            self.desired_speed = -25
+            self.desired_speed = -26
         elif(direction == "STP"):
             self.desired_speed = 0
         else:
@@ -310,6 +310,7 @@ class myMotors():
         self.set_single_motor("BL", motor_value_BL)
         
     def set_single_motor(self,motor,percent):
+        #print(motor + "-"+str(percent))
         if(self.motor_rev_arr[motor]):
             reversePin = self.pinAssignments[motor]
             forwardPin = reversePin + 1
@@ -340,7 +341,8 @@ class myMotors():
         
     def limit_motor_value(self,value):
         if abs(value) < self.motor_value_limit:
-            return 0
+            #return 0
+            return value
         else:
             return value
         
@@ -371,7 +373,7 @@ class myMotors():
             motor_angle_value = self.angle_total_buff*(50/self.angle_total_limit)
         else:
             motor_angle_value = 0
-        
+        print("Speed Vlaue: " + str(motor_speed_value) + " Angle Value: " + str(motor_angle_value))
         motor_value_FR = motor_speed_value - motor_angle_value
         motor_value_FL = motor_speed_value + motor_angle_value
         motor_value_BR = motor_speed_value - motor_angle_value
@@ -402,13 +404,15 @@ class myMotors():
         if((self.last_enable_pid != self.enable_pid)):
             self.kill_motors()
             
-        self.last_enable_pid_arr = self.enable_pid
+        self.last_enable_pid= self.enable_pid
         
         self.current_angle = self.none_check(self.current_angle,self.myIMU.get_angle()[0])                   
 
         if(self.enable_pid):
             self.update_angle_pid()
         self.update_motor_output_tank()
+        self.print_pid_info()
+        self.print_state_info()
 
     def kill_motors(self):
         self.set_single_motor("FR",0)
@@ -466,7 +470,7 @@ if __name__ == "__main__":
     pca = PCA9685PWM(i2c)
     
     angle_pid_p = 1.5
-    angle_pid_i = 0.1
+    angle_pid_i = 0.0
     angle_pid = [angle_pid_p,angle_pid_i]
     #Create Motors Object
     motors = myMotors(bno,pca,angle_pid)

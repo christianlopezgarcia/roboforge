@@ -30,8 +30,8 @@ time.sleep(0.5)
 bno = BNO055(i2c)
 pca = PCA9685PWM(i2c)
 
-angle_pid_p = 1.5
-angle_pid_i = 0.1
+angle_pid_p = 0.5
+angle_pid_i = 0.0
 angle_pid = [angle_pid_p, angle_pid_i]
 
 # Create Motors Object
@@ -41,6 +41,7 @@ motors = myMotors(bno, pca, angle_pid)
 motors.set_pid_enable(0)
 motors.move("STP")
 motors.turn(0)
+motors.update_motors()
 
 def run_motors_tmp():
     motors.update_motors()
@@ -123,16 +124,15 @@ def get_ultrasonic_data():
     return uinfo
 
 def move_1ms_motors(direction = "FWD"):
-    print("StART")
+    motors.angle_i_buf = 0
     motors.move(direction)
     motors.update_motors()
     time.sleep(0.1)
-    print("STOP")
     motors.move("STP")
     motors.update_motors()
-    motors.kill_motors()
+    #motors.kill_motors()
 
-def approach_and_pickup():
+def approach_and_pickup(block=None):
     TOL = 0.5
     i = 1
 
@@ -155,6 +155,10 @@ def approach_and_pickup():
                 pickup_fn()
                 matched = True
                 move_1ms_motors(direction = "REV")
+
+                if block:
+                    unique_blocks.remove(block)
+
                 break
         if matched:
             break
@@ -164,6 +168,9 @@ def approach_and_pickup():
         time.sleep(.5)
         i += 1
 
+
+def all_blocks_picked():
+    return len(unique_blocks) == 0
 # ----------------------------------------------------
 # MAIN LOOP
 # ----------------------------------------------------
@@ -181,6 +188,7 @@ def main():
     start_ultra_thread(sample_rate, echo_pin, trigger_pin)
 
     print("ENTER WHILE LOOP")
+    no_blocks_left = False
     try:
         vision.PAUSE_PROCESSING = True
         init_arm()
@@ -221,8 +229,17 @@ def main():
                 print("APPROACHING AND PICKING UP")
                 vision.PAUSE_PROCESSING = True
                 time.sleep(3)
-                approach_and_pickup()
+                approach_and_pickup(MINIMUM_BLOCK)
                 vision.PAUSE_PROCESSING = False
+
+            #     with vision.TARGET_INFO_LOCK:
+            #         targets = dict(vision.GLOBAL_TARGET_INFO)
+            #     if not targets and all_blocks_picked():
+            #         no_blocks_left = True
+            # if no_blocks_left:
+            #     print("YAYYYYYY")
+            #     break
+
 
     except KeyboardInterrupt:
         print("\n[Main] Keyboard interrupt — shutting down.")
