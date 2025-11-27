@@ -39,7 +39,7 @@ class RobotArm:
     OPEN = 160
     CLOSED = 40
     POSES = {
-        "default":      {"base": 90, "shoulder": 175, "elbow": 0,  "wrist": 0,  "hand": OPEN}, #solid
+        "default":             {"base": 90, "shoulder": 175, "elbow": 0,  "wrist": 0,  "hand": OPEN}, #solid
         "default_closed":      {"base": 90, "shoulder": 180, "elbow": 0,  "wrist": 0,  "hand": CLOSED},
 
         "focused":              {"base": 90, "shoulder": 180, "elbow": 80,  "wrist":5 ,  "hand": OPEN}, #solid
@@ -78,6 +78,7 @@ class RobotArm:
     MIN_PULSE = 500
     MAX_PULSE = 3000
     STEP = 2
+    FAST_STEP = 2
     DELAY = 0.05
     ACTUATION_RANGE = 200
 
@@ -159,7 +160,7 @@ class RobotArm:
         # fixed stepping that never skips the final target
         a = current
         while (direction == 1 and a < target) or (direction == -1 and a > target):
-            a += direction * self.STEP
+            a += direction * self.FAST_STEP
             if (direction == 1 and a > target) or (direction == -1 and a < target):
                 a = target
             self.kit.servo[ch].angle = a
@@ -170,15 +171,22 @@ class RobotArm:
     def add_angle(self, name, delta):
         self.set_joint(name, self.current[name] + delta)
 
-    def set_all(self, mapping, reverse=False):
+    def set_all(self, mapping, reverse=False, start_joint="base"):
         order = ["base", "shoulder", "elbow", "wrist", "hand"]
+
+        # move start_joint to front
+        if start_joint in order:
+            idx = order.index(start_joint)
+            order = order[idx:] + order[:idx]
+
         if reverse:
             order = order[::-1]
-        for j in order:
-            if j in mapping:
-                self.set_joint(j, mapping[j])
 
-    def move_to_pose(self, name, reverse = False):
+        for joint in order:
+            if joint in mapping:
+                self.set_joint(joint, mapping[joint])
+
+    def move_to_pose(self, name, reverse = False, start_joint = "base"):
         print(f"Pose: {name}")
         self.current_pose = name
         # if name == "default":
@@ -198,7 +206,7 @@ class RobotArm:
 
         #     # self.status()
         #     return 
-        self.set_all(self.POSES[name], reverse)
+        self.set_all(self.POSES[name], reverse, start_joint)
 
     def status(self):
         print("Angles:", self.current)
@@ -286,10 +294,10 @@ if __name__ == "__main__":
     arm = RobotArm(i2c_obj)
     time.sleep(0.5)
 
-    print('------ DEFAULT --------')
-    arm.move_to_pose("default")
-    time.sleep(0.5)
-    arm.status()
+    # print('------ DEFAULT --------')
+    # arm.move_to_pose("default", reverse= True)
+    # time.sleep(0.5)
+    # arm.status()
     
     # print('\n------ reach_forward --------')
     # arm.move_to_pose("reach_forward")
@@ -308,32 +316,32 @@ if __name__ == "__main__":
     # # time.sleep(2)
     # arm.status()
 
-    print('\n ------Default------')
-    arm.move_to_pose("wide_view")
-    time.sleep(4)
-    arm.status()
+    # print('\n ------Default------')
+    # arm.move_to_pose("wide_view")
+    # time.sleep(4)
+    # arm.status()
     # arm.move_to_pose("4_21_view")
     # time.sleep(4)
     # arm.status()
     
-    arm.move_to_pose("5cm")
-    time.sleep(2)
-    arm.status()
-    arm.move_to_pose("5cm_closed")
-    time.sleep(2)
-    arm.status()
-    arm.move_to_pose("5cm_30r_closed")
-    time.sleep(2)
-    arm.status()
-    arm.move_to_pose("default_closed",reverse =True)
-    time.sleep(2)
-    arm.status()
-    arm.move_to_pose("fold_over")
-    time.sleep(2)
-    arm.status()
-    arm.move_to_pose("fold_over_open")
-    time.sleep(2)
-    arm.status()
+    # arm.move_to_pose("5cm")
+    # time.sleep(2)
+    # arm.status()
+    # arm.move_to_pose("5cm_closed")
+    # time.sleep(2)
+    # arm.status()
+    # arm.move_to_pose("5cm_30r_closed")
+    # time.sleep(2)
+    # arm.status()
+    # arm.move_to_pose("default_closed",reverse =True)
+    # time.sleep(2)
+    # arm.status()
+    # arm.move_to_pose("fold_over")
+    # time.sleep(2)
+    # arm.status()
+    # arm.move_to_pose("fold_over_open")
+    # time.sleep(2)
+    # arm.status()
 
     # print("\n------ Move to XYZ (10, 5, 8) ------")
     # result = arm.move_xyz(10, 0, -6)
@@ -359,22 +367,25 @@ if __name__ == "__main__":
     # arm.move_to_pose("default")
     # arm.status()
 
-    print('\n ------Default------')
-    arm.move_to_pose("default")
-    arm.status()
+    # print('\n ------Default------')
+    # arm.move_to_pose("4_21_view")
+    # arm.status()
 
-    arm.move_to_pose("8cm")
-    time.sleep(1)
-    arm.move_to_pose("8cm_closed")
-    time.sleep(1)
-    arm.move_to_pose("8cm_30r_closed")
-    time.sleep(1)
-    arm.move_to_pose("fold_over",reverse =True)
-    time.sleep(2)
-    arm.status()
-    arm.move_to_pose("fold_over_open")
-    time.sleep(2)
-    arm.move_to_pose("default")
+    # arm.move_to_pose("8cm",reverse = True)
+    # time.sleep(1)
+    # arm.move_to_pose("8cm_closed")
+    # time.sleep(1)
+    # arm.move_to_pose("8cm_30r_closed")
+    # time.sleep(1)
+    # arm.move_to_pose("fold_over",reverse =True)
+    # time.sleep(2)
+    # arm.status()
+    # arm.move_to_pose("fold_over_open")
+    # time.sleep(2)
+    # arm.move_to_pose("default")
+    # arm.status()
+    # arm.set_all({"base": 90,  "shoulder": 50,  "elbow": 160,"wrist": 0,  "hand": 180})
+    arm.move_to_pose(name = "4_21_view",reverse = True)
     arm.status()
 
 

@@ -54,6 +54,8 @@ LAST_FRAME_LOCK = threading.Lock()
 
 # --- FIX: Initializing the Global STOP Flag ---
 STOP_FLAG = False # Use the global STOP_FLAG inside run() for clean exit
+PAUSE_PROCESSING = False
+
 # -----------------------------------------------
 
 # ------------------------------
@@ -169,6 +171,9 @@ def run():
     global LAST_FRAME_STITCHED
     global LAST_FRAME_LOCK
     global STOP_FLAG
+    global PAUSE_PROCESSING
+
+
 
     try:
         # ------------------------------
@@ -211,7 +216,11 @@ def run():
 
         # FIX: Use STOP_FLAG in the loop condition for clean exit
         while not STOP_FLAG:
-            
+
+            if PAUSE_PROCESSING:
+                time.sleep(0.05)
+                continue
+
             # --- 1. Get Frames (non-blocking) ---
             frame1 = ct1.next(black=True, wait=0.01)
             frame2 = ct2.next(black=True, wait=0.01)
@@ -426,12 +435,13 @@ def start_thread(wait_for_first_frame=1.0):
     Starts run() inside a daemon thread and waits a short time to ensure the 
     first detection cycle is complete before returning.
     """
-    global STEREO_THREAD, STOP_FLAG
+    global STEREO_THREAD, STOP_FLAG, PAUSE_PROCESSING
     if STEREO_THREAD is not None and STEREO_THREAD.is_alive():
         print("[Stereo] Already running.")
         return
 
     STOP_FLAG = False
+    PAUSE_PROCESSING = False
     
     def runner():
         run()
@@ -468,4 +478,8 @@ def stop_thread():
 
 
 if __name__ == '__main__':
-    run()
+    # run()
+    start_thread()
+    time.sleep(5)
+    PAUSE_PROCESSING= False
+    time.sleep()

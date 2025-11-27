@@ -5,15 +5,10 @@ import busio
 import board
 
 from roboforge_arm_v2.armbackup_1117 import RobotArm
-from roboforge_motors.MotorControl import myMotors, BNO055, PCA9685PWM
+from roboforge_motors.MotorControlv2 import myMotors, BNO055, PCA9685PWM
 
-# Stereo vision
-from roboforge_vision.traingulate_w_yolo import (
-    start_thread,
-    stop_thread,
-    GLOBAL_TARGET_INFO,
-    TARGET_INFO_LOCK
-)
+# Stereo vision (updated import)
+import roboforge_vision.traingulate_w_yolo as vision
 
 # >>> ULTRASONIC ADD >>>
 from Ultrasonic import (
@@ -32,29 +27,25 @@ i2c = busio.I2C(board.SCL, board.SDA)
 arm = RobotArm(i2c)
 time.sleep(0.5)
 
-
-
-# i2c = busio.I2C(board.SCL, board.SDA)
 bno = BNO055(i2c)
 pca = PCA9685PWM(i2c)
 
 angle_pid_p = 1.5
 angle_pid_i = 0.1
-angle_pid = [angle_pid_p,angle_pid_i]
-#Create Motors Object
-motors = myMotors(bno,pca,angle_pid)
+angle_pid = [angle_pid_p, angle_pid_i]
 
-#Auto Control # arm and initiallize
-motors.set_arming_status(1)
-motors.set_angle_pid_enable(1)
-motors.set_desired_speed(0)
-motors.set_desired_angle(motors.current_angle)
+# Create Motors Object
+motors = myMotors(bno, pca, angle_pid)
+
+# Auto Control # arm and initialize
+motors.set_pid_enable(0)
+motors.move("STP")
+motors.turn(0)
 
 def run_motors_tmp():
     motors.update_motors()
     motors.set_desired_speed(10)
     motors.update_motors()
-    # motors.set_desired_speed(10)
     time.sleep(5)
 
 # ----------------------------------------------------
@@ -63,99 +54,143 @@ def run_motors_tmp():
 
 def teardown():
     print('------ DEFAULT --------')
-    arm.move_to_pose("default")
+    arm.move_to_pose("default", reverse=True)
     time.sleep(0.5)
-    
-
-    print("done")
     motors.kill_motors()
+    print("done")
 
 def init_arm():
     print('------ DEFAULT --------')
     arm.move_to_pose("default")
     time.sleep(0.5)
-    
+
     print('\n------ WIDE VIEW --------')
-    arm.move_to_pose('21_84_cm_view')  
-    time.sleep(15)
+    arm.move_to_pose('21_84_cm_view')
+    # time.sleep(15)
 
 def five_cm_pickup():
-    arm.move_to_pose("5cm")
+    arm.move_to_pose("5cm", reverse=True)
     time.sleep(1)
-
     arm.move_to_pose("5cm_closed")
     time.sleep(1)
-    
     arm.move_to_pose("5cm_30r_closed")
     time.sleep(1)
-    
-    arm.move_to_pose("default_closed",reverse =True)
+    arm.move_to_pose("default_closed", reverse=True)
     time.sleep(1)
-    
-    arm.move_to_pose("fold_over",reverse = True)
+    arm.move_to_pose("fold_over", reverse=True)
     time.sleep(1)
-    
     arm.move_to_pose("fold_over_open")
     time.sleep(1)
-    
+    arm.move_to_pose("4_21_view",reverse = True)
+
 
 def ten_cm_pickup():
-    arm.move_to_pose("10_cm")
+    arm.move_to_pose("10_cm", reverse=True)
     time.sleep(1)
     arm.move_to_pose("10_cm_closed")
     time.sleep(1)
     arm.move_to_pose("10_cm_30r_closed")
     time.sleep(1)
-    arm.move_to_pose("fold_over",reverse =True)
+    arm.move_to_pose("fold_over", reverse=True)
     time.sleep(1)
-    
     arm.move_to_pose("fold_over_open")
     time.sleep(1)
-    arm.move_to_pose("default")
-    
+    arm.move_to_pose("4_21_view",reverse = True)
+
+    # time.sleep(1)
+    # arm.move_to_pose("default")
 
 def eight_cm_pickup():
-    arm.move_to_pose("8cm")
+    arm.move_to_pose("8cm", reverse=True)
     time.sleep(1)
     arm.move_to_pose("8cm_closed")
     time.sleep(1)
     arm.move_to_pose("8cm_30r_closed")
     time.sleep(1)
-    arm.move_to_pose("fold_over",reverse =True)
+    arm.move_to_pose("fold_over", reverse=True)
     time.sleep(1)
-    
     arm.move_to_pose("fold_over_open")
     time.sleep(1)
-    arm.move_to_pose("default")
-    
+    arm.move_to_pose("4_21_view",reverse = True)
+    # time.sleep(1)
+    # arm.move_to_pose("default")
 
-distance_to_move = {5: five_cm_pickup, 8: eight_cm_pickup, 10: ten_cm_pickup}
+DISTANCE_TO_ACTION_MAP = {5: five_cm_pickup, 8: eight_cm_pickup, 10: ten_cm_pickup}
 
+def get_ultrasonic_data():
+    with ULTRASONIC_INFO_LOCK:
+        uinfo = dict(GLOBAL_ULTRASONIC_INFO)
+    return uinfo
+
+def move_1ms_motors(direction = "FWD"):
+    print("StART")
+    motors.move(direction)
+    motors.update_motors()
+    time.sleep(0.1)
+    print("STOP")
+    motors.move("STP")
+    motors.update_motors()
+    motors.kill_motors()
+
+def approach_and_pickup():
+    TOL = 0.5
+    i = 1
+
+    while True:
+        print("loop, i:", i)
+        data = get_ultrasonic_data()
+        current_distance = data.get('US_distance_cm')
+
+        if current_distance is None:
+            print("No ultrasonic reading. Waiting...")
+            time.sleep(0.1)
+            continue
+
+        print("Distance:", current_distance)
+
+        matched = False
+        for target_dist, pickup_fn in DISTANCE_TO_ACTION_MAP.items():
+            if abs(current_distance - target_dist) <= TOL:
+                print(f"Distance {current_distance} within ±{TOL} of {target_dist}. Executing pickup.")
+                pickup_fn()
+                matched = True
+                move_1ms_motors(direction = "REV")
+                break
+        if matched:
+            break
+
+        if not matched:
+            move_1ms_motors()
+        time.sleep(.5)
+        i += 1
 
 # ----------------------------------------------------
 # MAIN LOOP
 # ----------------------------------------------------
+unique_blocks = []
 
 def main():
     print("[Main] Starting stereo vision thread...")
-    start_thread()
+    vision.start_thread()
 
-    ultrasonic_running = True   # >>> NEW FLAG <<<
+    ultrasonic_running = True
 
-    # Ultrasonic settings
     sample_rate = 100
     echo_pin = 17
     trigger_pin = 27
     start_ultra_thread(sample_rate, echo_pin, trigger_pin)
+
+    print("ENTER WHILE LOOP")
     try:
+        vision.PAUSE_PROCESSING = True
         init_arm()
+        vision.PAUSE_PROCESSING = False
         while True:
             time.sleep(0.1)
-            
-            # Safely copy the shared target dictionary
-            with TARGET_INFO_LOCK:
-                targets = dict(GLOBAL_TARGET_INFO)
-            # print("\ntargets", targets)
+
+            with vision.TARGET_INFO_LOCK:
+                targets = dict(vision.GLOBAL_TARGET_INFO)
+
             if targets:
                 print("\n=== TARGETS FROM VISION THREAD ===")
                 MINIMUM_BLOCK = list(targets.keys())[0]
@@ -167,41 +202,33 @@ def main():
                           f"D={info['D']:.2f} "
                           f"Conf={info['confidence']:.2f}")
 
-                    # Update nearest object
+                    if name not in unique_blocks:
+                        unique_blocks.append(name)
+
                     if info['D'] < targets[MINIMUM_BLOCK]['D']:
                         MINIMUM_BLOCK = name
 
-                # Enter focused mode if close
-                if info['D'] < .30 and arm.current_pose != "4_21_view":
-                    arm.move_to_pose("4_21_view")
+                if info['D'] < 0.30 and arm.current_pose != "4_21_view":
+                    vision.PAUSE_PROCESSING = True
+                    arm.move_to_pose("4_21_view",)
+                    vision.PAUSE_PROCESSING = False
                     time.sleep(0.5)
 
-                # -----------------------------------------------------
-                # >>> ULTRASONIC START TRIGGER <<<
-                # After focused AND close (< 0.30)
-                # -----------------------------------------------------
-                if arm.current_pose == "4_21_view" and targets[MINIMUM_BLOCK]['D'] < .30:
+                if arm.current_pose == "4_21_view" and targets[MINIMUM_BLOCK]['D'] < 0.30:
                     D_min = targets[MINIMUM_BLOCK]['D']
                     print(f"Closest distance: {D_min:.3f}")
 
-
-                # -----------------------------------------------------
-                # >>> READ ULTRASONIC (if running) <<<
-                # -----------------------------------------------------
-                with ULTRASONIC_INFO_LOCK:
-                    uinfo = dict(GLOBAL_ULTRASONIC_INFO)
-
-                print(uinfo)
-                # for name, info in uinfo.items():
-                #     print(f"ULTRA {name}: "
-                #             f"{info['US_distance_cm']:.2f} cm "
-                #             f"(ts={info['ts']:.2f})",end='\r', flush=True)
+                print("APPROACHING AND PICKING UP")
+                vision.PAUSE_PROCESSING = True
+                time.sleep(3)
+                approach_and_pickup()
+                vision.PAUSE_PROCESSING = False
 
     except KeyboardInterrupt:
         print("\n[Main] Keyboard interrupt — shutting down.")
 
     finally:
-        stop_thread()
+        vision.stop_thread()
         if ultrasonic_running:
             stop_ultra_thread()
 
@@ -209,7 +236,6 @@ def main():
         teardown()
         time.sleep(1)
         print("[Main] Done.")
-
 
 if __name__ == "__main__":
     main()

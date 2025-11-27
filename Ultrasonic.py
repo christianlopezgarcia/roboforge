@@ -46,6 +46,7 @@ def Ultrasonic(sample_rate, echo_pin, trigger_pin):
                     'US_distance_cm': ping_dist,
                     'ts': last_time
                 })
+            # print(ping_dist)
 
         time.sleep(0.001)
 

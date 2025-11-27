@@ -204,7 +204,7 @@ class BNO055:
         x=1
 
 class PCA9685PWM:
-    def __init__(self, i2c, freq_hz=1000):
+    def __init__(self, i2c, freq_hz=50):
         self.pca = adafruit_pca9685.PCA9685(i2c)
         self.pca.frequency = freq_hz
 
@@ -274,9 +274,9 @@ class myMotors():
             
     def move(self,direction):
         if(direction == "FWD"):
-            self.desired_speed = 40
+            self.desired_speed = 25
         elif(direction == "REV"):
-            self.desired_speed = -40
+            self.desired_speed = -25
         elif(direction == "STP"):
             self.desired_speed = 0
         else:
@@ -496,7 +496,7 @@ if __name__ == "__main__":
         #Update Motors
         motors.move("FWD")
         motors.update_motors()
-        time.sleep(15)
+        time.sleep(.1)
         motors.move("STP")
         motors.update_motors()
 
@@ -519,3 +519,4 @@ if __name__ == "__main__":
         
     print("done")
     motors.kill_motors()  
+    # time.sleep(60)
