@@ -70,18 +70,18 @@ def frame_rot(degrees, vector):
     return rot @ vector
 
 def kin_fwd(th1, th2):
-
+    print("\n\n--------------------------------------------------\nForward Kinematics Calculation\n--------------------------------------------------\n")
     # perform same rotations? ... yes rigjt?
 
     # measured lengths
     length1 = 65 # mm
-    length2 = 65 # mm
+    length2 = 90 # mm
     length_hand = 90 # mm
 
     # limit the angles
-    limits = [0,180] 
-    th1 = max(limits[0], min(limits[1], th1))
-    th2 = max(limits[0], min(limits[1], th2))
+    # limits = [0,180] 
+    # th1 = max(limits[0], min(limits[1], th1))
+    # th2 = max(limits[0], min(limits[1], th2))
 
     # convert to radians for np
     th1 = np.deg2rad(th1)
@@ -91,14 +91,23 @@ def kin_fwd(th1, th2):
     x = length1*np.cos(th1) + length2*np.cos(th1 + th2)
     y = length1*np.sin(th1) + length2*np.sin(th1 + th2)
 
-    xy = [x,y]
+    # xy = [x,y]
     # xy = base_frame(xy) # TODO
-    return xy
+    return [x,y]
 
 # input current position and desired position 
 # -> returns theta1 theta2 for the 2 link robot manipulator
 def kin_inv(x_des, y_des):
-    
+    print("--------------------------------------------------\nInverse Kinematics Calculation\n -------------------------------------------------\n")
+    # measured lengths
+    length1 = 65 # mm
+    length2 = 90 # mm --  I think should be 90mm instead of 65mm -- actually bring the end effector position to the desired xy
+    length_hand = 90 # mm -- will need to subtract to the desired position? 
+
+    # unreachable case # 1
+    if np.sqrt(x_des**2 + y_des**2) > length1 + length2:
+        print("Unreachable case #1: out of reach")
+        return
     # put it in the Q1 reference frame:
     # rot = np.array([[0,1,0],
                 #    [-1,0,0],
@@ -108,48 +117,52 @@ def kin_inv(x_des, y_des):
                         [y_des],
                         [1]])
 
-    print(f"Inverse Kinematics: \nPostion vector before rotation: {pos_vect}")
+    # print(f"Inverse Kinematics: \nPostion vector before rotation: {pos_vect}")
     # pos_vect = rot @ pos_vect
-    pos_vect = frame_rot(-90, pos_vect) # -90 degrees to bring from horizontal to vertical. 4th quadrant to 1st
+    # pos_vect = frame_rot(-90, pos_vect) # -90 degrees to bring from horizontal to vertical. 4th quadrant to 1st
 
-    print(f"postion vector after rotation: {pos_vect}")
+    # print(f"postion vector after rotation: {pos_vect}")
 
-    x_des = pos_vect[1]
-    y_des = pos_vect[2]
+    x_des = pos_vect[0]
+    y_des = pos_vect[1]
     print(f"position vector = {pos_vect}\nx desired = {x_des}\n y desired = {y_des}\n")
-   
-    # measured lengths
-    length1 = 65 # mm
-    length2 = 65 # mm --  I think should be 90mm -- actually bring the end effector position to the desired xy
-    length_hand = 90 # mm -- will need to subtract to the desired position? 
-   
 
     # as theta 2 will be negative, we use this version. credit: 
     # https://robotacademy.net.au/lesson/inverse-kinematics-for-a-2-joint-robot-arm-using-geometry/
     q2 = -np.arccos((x_des**2 + y_des**2 - length1**2 - length2**2 ) / (2*length1*length2))
     # atan2 only bc 2 inputs simplifies inputting the equations
-    q1 = np.arctan2(x_des,y_des) + np.arctan2(length2*np.sin(q2), (length1+length2*np.cos(q2)))
+    num2 = length2*np.sin(q2)
+    den2 = (length1+(length2*np.cos(q2)))
+    q1 = np.arctan2(y_des,x_des) + np.arctan2(num2, den2)
+    # q1 = np.arctan((y_des/x_des)) + np.arctan(num2/den2)
 
+    # print(f"q1 in radians: {q1}\n q2 in radians:{q2}")
     # bring back to degrees
     q1 = np.rad2deg(q1)
     q2 = np.rad2deg(q2)
 
-    # negative values for atan would be bad for us. mistake here
-    if(q1 < 0):
-        print(f"desired theta1 is Negative. bounding to positive value")
-        q1 = abs(q1)
-    
+    # print(f"q1 in degrees: {q1}\n q2 in degrees:{q2}")
+
+    # for some reason we're off by 90 degrees and not in a fun way
+    if(q1 < -0.5):
+        print(f"desired theta1 is Negative. shifting by 90 degrees")
+        q1 = 90+q1
+    elif q1 > 0.5:
+        q1 = 90-q1
     
     # now need to rotate -90 degrees -- apply rotation matrix
-
+    # don't need to rotate back. unless the frames don't make sense
+    q_v = [q1,q2]
+    return q_v
     # q_v = np.array((x),(y),(1))
     # print(f"angle vectors {q_v}")
     
 
 # assumes the arm is outstretched -- shoulder and elbow both at 180degrees. 
-def wrist_map(ping):
+# ping is the distance detected by the ultrasonic sensor
+def wrist_map(ultrasonic):
     # just because the arm angles are all measured in mm
-    x = ping * 10
+    x = ultrasonic * 10
     max_dist = 90 # just a guess right now. could be 8.5 - 9.5 < ------
     min_dist = 50
     grab_length = 90
@@ -172,9 +185,9 @@ def wrist_map(ping):
 
 if __name__ == '__main__':
     # implementing the DH table for the Arm.
-    
+    print("\n\n ======================Starting Kinematics.py Main FCN =======================")
     # *** need to be updated *** remeasure!
-
+    ''' joints unused for now
     base_j = joint(90  , 0 ,  0 , -30)
     # from the base to the shoulder
     #   --shoulder servo angled forward -- to look horizontal
@@ -187,12 +200,38 @@ if __name__ == '__main__':
     wrist_j = joint(-20, 0, 0  , 65)
     #from wrist to hand
     hand_j = joint(0  , 0   , 0  , 90)
-
+    '''
 
     # Set y to negative idk, 5? tbd with measurments. and the x will be transformed to a y, computed, then transformed back to x.
     # x will be the ping sensor distance. detected. 
-    print(f"basic test for forward kinematics 2-link:\n{kin_fwd(15, 45)}\n -- should be ")
-    print(f"basic test for inverse kinematics 2-link:\n{kin_inv(80,-10)}\n -- should be ")
+
+    th1_test = 45
+    th2_test = 45
+
+    print(f"Starting with angles:\nth1_test = {th1_test}\nth2_test = {th2_test}")
+    xy = kin_fwd(th1_test, th2_test)
+    # for val in xy:
+    #     if val < 1*10**-6:
+    #         xy = 0
+    print(f"basic test for forward kinematics 2-link:\nx = {xy[0]}\ny = {xy[1]}")
+    # print(f"basic test for inverse kinematics 2-link:\n{kin_inv(80,-10)}\n -- should be ")
+
+    x_des = xy[0]
+    y_des = xy[1]
+    [th1, th2] = kin_inv(x_des,y_des)
+    [x_set, y_set] = kin_fwd(th1,th2)
+
+    print(f"Desired and acceptable angles: \ntheta1 = {th1_test}\ntheta2 = {th2_test}\n")
+    print(f"Computed xy values with forward kinematics function: \nx_des = {x_des}\ny_des = {y_des}\n ")
+    print(f"Computed values inverse kinematics function:\ntheta1 = {th1}\ntheta2 = {th2}\n")
+    print(f"Sanity Check! Computed xy values with forward kinematics based on inverse kinematics:\nx = {x_set}\ny = {y_set}\n")
+
+
+    x1 = 65*np.cos(np.deg2rad(13))
+    x2 = 90*np.cos(np.deg2rad(-120))
+    # print(f"horizontal distance from component 1 is: 65mm *cos(13) = {x1}")
+    # print(f"horizonatl distance from component 2 is: 90mm *cos(-120) = {x2}")
+    # print(f"total horizantl distance covered = sum: {x1+x2}")
 
 
 
