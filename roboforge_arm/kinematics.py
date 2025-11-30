@@ -59,14 +59,16 @@ def get_carte(A):
 #     # simple add/subtract to convert forward frame of shoulder @ 180 to robot frame
 #     # robot frame based on the lower Ultrasonic sensor
 
-def frame_rot(degrees, np.array vector):
+def frame_rot(degrees, vector):
     th = np.deg2rad(degrees)
+
    # put it in the Q1 reference frame:
     rot = np.array([[np.cos(th),np.sin(th),0],
                    [-np.sin(th),np.cos(th),0],
                    [0,          0,         1]])
-    
-    return 
+    # print(rot @ vector)
+    return rot @ vector
+
 def kin_fwd(th1, th2):
 
     # perform same rotations? ... yes rigjt?
@@ -98,23 +100,29 @@ def kin_fwd(th1, th2):
 def kin_inv(x_des, y_des):
     
     # put it in the Q1 reference frame:
-    rot = np.array([[0,1,0],
-                   [-1,0,0],
-                   [0,0,1]])
+    # rot = np.array([[0,1,0],
+                #    [-1,0,0],
+                #    [0,0,1]])
     
     pos_vect = np.array([[x_des],
                         [y_des],
                         [1]])
-    
-    print(f"postion vector before rotation: {pos_vect}")
-    pos_vect = rot @ pos_vect
+
+    print(f"Inverse Kinematics: \nPostion vector before rotation: {pos_vect}")
+    # pos_vect = rot @ pos_vect
+    pos_vect = frame_rot(-90, pos_vect) # -90 degrees to bring from horizontal to vertical. 4th quadrant to 1st
+
     print(f"postion vector after rotation: {pos_vect}")
 
+    x_des = pos_vect[1]
+    y_des = pos_vect[2]
+    print(f"position vector = {pos_vect}\nx desired = {x_des}\n y desired = {y_des}\n")
+   
     # measured lengths
     length1 = 65 # mm
-    length2 = 65 # mm
-    length_hand = 90 # mm
-    # check that cur != diff -- do that when calling
+    length2 = 65 # mm --  I think should be 90mm -- actually bring the end effector position to the desired xy
+    length_hand = 90 # mm -- will need to subtract to the desired position? 
+   
 
     # as theta 2 will be negative, we use this version. credit: 
     # https://robotacademy.net.au/lesson/inverse-kinematics-for-a-2-joint-robot-arm-using-geometry/
@@ -181,9 +189,10 @@ if __name__ == '__main__':
     hand_j = joint(0  , 0   , 0  , 90)
 
 
-
-    print(f"basic test for forward kinematics 2-link:\n{kin_fwd(15, 45)}\n -- should be 0, 130")
-    print(f"basic test for inverse kinematics 2-link:\n{kin_inv(10,130)}\n -- should be 90, 0")
+    # Set y to negative idk, 5? tbd with measurments. and the x will be transformed to a y, computed, then transformed back to x.
+    # x will be the ping sensor distance. detected. 
+    print(f"basic test for forward kinematics 2-link:\n{kin_fwd(15, 45)}\n -- should be ")
+    print(f"basic test for inverse kinematics 2-link:\n{kin_inv(80,-10)}\n -- should be ")
 
 
 
