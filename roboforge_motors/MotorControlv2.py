@@ -462,8 +462,13 @@ class myMotors():
         motors.update_motors()
     
     def turn_and_move(self,direction,duration):
-        
+        buf_p = self.angle_p
+        buf_i = self.angle_i
         buf = self.desired_angle
+
+        self.angle_p = 1
+        self.angle_i = 0.1
+        
         if(direction == "Left"):
             dir = -1
         elif(direction == "Right"):
@@ -476,7 +481,9 @@ class myMotors():
         now = time.time()
         while(time.time() - 3 < now):
             self.update_motors()
-        
+
+        self.set_desired_angle(self.current_angle)
+
         time.sleep(0.1)
         self.move("FWD")
         self.update_motors()
@@ -484,10 +491,14 @@ class myMotors():
         self.move("STP")
         self.update_motors()
         time.sleep(0.1)
+
         self.set_desired_angle(buf)
         now = time.time()
         while(time.time() - 3 < now):
-            self.update_motors()        
+            self.update_motors()
+
+        self.angle_p = buf_p
+        self.angle_i = buf_i        
 
 
 def motor_thread(update_time):
@@ -533,7 +544,7 @@ if __name__ == "__main__":
     time_last_update = time.time()
     #time.sleep(10)
 
-    motors.turn_and_move("Right", 1)
+    motors.turn_and_move("Right", 5)
 
     while 1:
         #print(bno.get_angle())

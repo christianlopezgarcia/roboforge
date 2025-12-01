@@ -23,23 +23,18 @@ if __name__ == '__main__':
     try:
         while True:
             time.sleep(1)
-            print(time.time())
+            # print(time.time())
             # Safely copy the shared target dictionary
             with ULTRASONIC_INFO_LOCK:
                 ultrasonic_info = dict(GLOBAL_ULTRASONIC_INFO)
-
-            for name, info in ultrasonic_info.items():
-                print(f"{name}: "
-                        f"distance ={info['US_distance_cm']:.2f} "
-                        f"={info['ts']:.2f} "
-                )
+            print(f"distance ={ultrasonic_info['US_distance_cm']:.2f} ")
 
             if(time.time() > start_time + 60):
                 print(" --------------------------------------------- STOP THREAD -------------------------")
                 stop_thread()
                 break
 
-    except: 
-        print("exception a thrown")
+    except Exception as e: 
+        print(e)
 
 
