@@ -30,15 +30,15 @@ time.sleep(0.5)
 bno = BNO055(i2c)
 pca = PCA9685PWM(i2c)
 
-angle_pid_p = 0.5
-angle_pid_i = 0.0
+angle_pid_p = 0.2
+angle_pid_i = 0.1
 angle_pid = [angle_pid_p, angle_pid_i]
 
 # Create Motors Object
 motors = myMotors(bno, pca, angle_pid)
 
 # Auto Control # arm and initialize
-motors.set_pid_enable(0)
+motors.set_pid_enable(1)
 motors.move("STP")
 motors.turn(0)
 motors.update_motors()
@@ -127,13 +127,13 @@ def move_1ms_motors(direction = "FWD"):
     motors.angle_i_buf = 0
     motors.move(direction)
     motors.update_motors()
-    time.sleep(0.1)
+    time.sleep(0.04)
     motors.move("STP")
     motors.update_motors()
     #motors.kill_motors()
 
 def approach_and_pickup(block=None):
-    TOL = 0.5
+    TOL = 0.25
     i = 1
 
     while True:

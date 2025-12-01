@@ -411,8 +411,8 @@ class myMotors():
         if(self.enable_pid):
             self.update_angle_pid()
         self.update_motor_output_tank()
-        self.print_pid_info()
-        self.print_state_info()
+        # self.print_pid_info()
+        # self.print_state_info()
 
     def kill_motors(self):
         self.set_single_motor("FR",0)
@@ -452,6 +452,15 @@ class myMotors():
         print("Total Buffer Value (Angle): " + str(self.angle_total_buff))
         print("Percent Motor Power (Angle)" + str(self.angle_total_buff/self.angle_total_limit*50))
         print("")
+        
+    def move_1ms_motors(self,direction = "FWD"):
+        motors.angle_i_buf = 0
+        motors.move(direction)
+        motors.update_motors()
+        time.sleep(0.1)
+        motors.move("STP")
+        motors.update_motors()
+    
 
 
 def motor_thread(update_time):
@@ -470,14 +479,14 @@ if __name__ == "__main__":
     pca = PCA9685PWM(i2c)
     
     angle_pid_p = 1.5
-    angle_pid_i = 0.0
+    angle_pid_i = 0.1
     angle_pid = [angle_pid_p,angle_pid_i]
     #Create Motors Object
     motors = myMotors(bno,pca,angle_pid)
     
     #Auto Control # arm and initiallize
  
-    motors.set_pid_enable(0)
+    motors.set_pid_enable(1)
     motors.move("STP")
     motors.turn(0)
     
@@ -489,36 +498,45 @@ if __name__ == "__main__":
 
     update_time = 0.1 #seconds
     print_time = 1 #seconds
-    max_runtime = 3 #seconds
+    max_runtime = 60 #seconds
     
     time_start = time.time()
     time_last_print = time.time()
     time_last_update = time.time()
-    
+    time.sleep(10)
     while 1:
-        
+        #print(bno.get_angle())
         #Update Motors
-        motors.move("FWD")
-        motors.update_motors()
-        time.sleep(.1)
-        motors.move("STP")
-        motors.update_motors()
+        #motors.move("FWD")
+        #motors.update_motors()
+        #time.sleep(.1)
+        #motors.move("STP")
+        #motors.update_motors()
+        # motors.angle_i_buff = 0
+        # for i in range(0,10):
+        #     motors.move_1ms_motors("FWD")
+        #     time.sleep(0.5)
+        
+        # motors.move_1ms_motors("REV")
+        # time.sleep(5)
 
         
         # # motors.move_LR("Right")
-        # if(time.time() - time_last_update > update_time):
-        #     motors.update_motors()
-        #     time_last_update = time.time()    
+        
+        if(time.time() - time_last_update > update_time):
+            motors.spin_motor(20)
+            motors.update_motors()
+            time_last_update = time.time()    
         # #Print Info
         # if(time.time() - time_last_print > print_time):
         #     motors.print_state_info()
         #     motors.print_pid_info()
         #     time_last_print = time.time()
             
-        # #Break out
-        # rutime_break = ((time.time() - time_start) > max_runtime)   
-        # if(rutime_break):
-        break
+         #Break out
+        rutime_break = ((time.time() - time_start) > max_runtime)   
+        if(rutime_break):
+            break
         
         
     print("done")

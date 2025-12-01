@@ -37,7 +37,7 @@ class RobotArm:
     }
 
     OPEN = 160
-    CLOSED = 40 #20 gave wierd issues good luck kevin
+    CLOSED = 25 #20 gave wierd issues good luck kevin
     POSES = {
         "default":             {"base": 90, "shoulder": 175, "elbow": 0,  "wrist": 0,  "hand": OPEN}, #solid
         "default_closed":      {"base": 90, "shoulder": 180, "elbow": 0,  "wrist": 0,  "hand": CLOSED},
@@ -285,7 +285,50 @@ class RobotArm:
             "wrist": wrist_angle
         }
 
+def five_cm_pickup():
+    arm.move_to_pose("5cm", reverse=True)
+    time.sleep(1)
+    arm.move_to_pose("5cm_closed")
+    time.sleep(1)
+    arm.move_to_pose("5cm_30r_closed")
+    time.sleep(1)
+    arm.move_to_pose("default_closed", reverse=True)
+    time.sleep(1)
+    arm.move_to_pose("fold_over", reverse=True)
+    time.sleep(1)
+    arm.move_to_pose("fold_over_open")
+    time.sleep(1)
+    arm.move_to_pose("4_21_view",reverse = True)
 
+
+def ten_cm_pickup():
+    arm.move_to_pose("10_cm", reverse=True)
+    time.sleep(1)
+    arm.move_to_pose("10_cm_closed")
+    time.sleep(1)
+    arm.move_to_pose("10_cm_30r_closed")
+    time.sleep(1)
+    arm.move_to_pose("fold_over", reverse=True)
+    time.sleep(1)
+    arm.move_to_pose("fold_over_open")
+    time.sleep(1)
+    arm.move_to_pose("4_21_view",reverse = True)
+
+    # time.sleep(1)
+    # arm.move_to_pose("default")
+
+def eight_cm_pickup():
+    arm.move_to_pose("8cm", reverse=True)
+    time.sleep(1)
+    arm.move_to_pose("8cm_closed")
+    time.sleep(1)
+    arm.move_to_pose("8cm_30r_closed")
+    time.sleep(1)
+    arm.move_to_pose("fold_over", reverse=True)
+    time.sleep(1)
+    arm.move_to_pose("fold_over_open")
+    time.sleep(1)
+    arm.move_to_pose("4_21_view",reverse = True)
 # ------------------------------------------------------------
 # Demo usage
 # ------------------------------------------------------------
@@ -294,10 +337,13 @@ if __name__ == "__main__":
     arm = RobotArm(i2c_obj)
     time.sleep(0.5)
 
-    # print('------ DEFAULT --------')
-    # arm.move_to_pose("default", reverse= True)
-    # time.sleep(0.5)
-    # arm.status()
+    print('------ DEFAULT --------')
+    arm.move_to_pose("default", reverse= True)
+    time.sleep(0.5)
+    arm.status()
+
+    ten_cm_pickup()
+    five_cm_pickup()
     
     # print('\n------ reach_forward --------')
     # arm.move_to_pose("reach_forward")
