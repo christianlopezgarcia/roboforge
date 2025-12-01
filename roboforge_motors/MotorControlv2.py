@@ -461,6 +461,33 @@ class myMotors():
         motors.move("STP")
         motors.update_motors()
     
+    def turn_and_move(self,direction,duration):
+        
+        buf = self.desired_angle
+        if(direction == "Left"):
+            dir = -1
+        elif(direction == "Right"):
+            dir = 1
+        else:
+            dir = 0
+            print("error")
+
+        self.turn(dir*90)
+        now = time.time()
+        while(time.time() - 3 < now):
+            self.update_motors()
+        
+        time.sleep(0.1)
+        self.move("FWD")
+        self.update_motors()
+        time.sleep(duration)
+        self.move("STP")
+        self.update_motors()
+        time.sleep(0.1)
+        self.set_desired_angle(buf)
+        now = time.time()
+        while(time.time() - 3 < now):
+            self.update_motors()        
 
 
 def motor_thread(update_time):
@@ -478,7 +505,7 @@ if __name__ == "__main__":
     bno = BNO055(i2c)
     pca = PCA9685PWM(i2c)
     
-    angle_pid_p = 1.5
+    angle_pid_p = 1
     angle_pid_i = 0.1
     angle_pid = [angle_pid_p,angle_pid_i]
     #Create Motors Object
@@ -489,6 +516,7 @@ if __name__ == "__main__":
     motors.set_pid_enable(1)
     motors.move("STP")
     motors.turn(0)
+    motors.update_motors()
     
     #Direct Control
     #motors.set_single_motor("FR",100)
@@ -498,12 +526,15 @@ if __name__ == "__main__":
 
     update_time = 0.1 #seconds
     print_time = 1 #seconds
-    max_runtime = 60 #seconds
+    max_runtime = 2 #seconds
     
     time_start = time.time()
     time_last_print = time.time()
     time_last_update = time.time()
-    time.sleep(10)
+    #time.sleep(10)
+
+    motors.turn_and_move("Right", 1)
+
     while 1:
         #print(bno.get_angle())
         #Update Motors
@@ -523,10 +554,10 @@ if __name__ == "__main__":
         
         # # motors.move_LR("Right")
         
-        if(time.time() - time_last_update > update_time):
-            motors.spin_motor(20)
-            motors.update_motors()
-            time_last_update = time.time()    
+        # if(time.time() - time_last_update > update_time):
+        #     motors.spin_motor(20)
+        #     motors.update_motors()
+        #     time_last_update = time.time()    
         # #Print Info
         # if(time.time() - time_last_print > print_time):
         #     motors.print_state_info()
