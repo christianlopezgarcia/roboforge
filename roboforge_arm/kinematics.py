@@ -153,10 +153,34 @@ def kin_inv(x_des, y_des):
     # now need to rotate -90 degrees -- apply rotation matrix
     # don't need to rotate back. unless the frames don't make sense
     q_v = [q1,q2]
+
+    # q2 = 90 + q2 for wrist
     return q_v
     # q_v = np.array((x),(y),(1))
     # print(f"angle vectors {q_v}")
     
+
+# converts the ultrasonic's distance to angles for the wrist and elbow. assuming the shoulder is at 180. 
+def arm_ik(x_des):
+    # math to convert the ultrasonically sensed distnace to x desired
+
+    # y_des probably fixed -- -90 to -50?
+    y_des = -50 # ?
+
+    pos_vect = np.array([[x_des],
+                        [y_des],
+                        [1]])
+    
+    pos_vect = frame_rot(-90, pos_vect)
+    x_des = pos_vect[0]
+    y_des = pos_vect[1]
+
+    [elbow, wrist] = kin_inv(x_des,y_des)
+    wrist = wrist + 90
+    #elbow should be the same still
+    return [elbow, wrist]
+
+# def arm_fk(th1,th2):
 
 # assumes the arm is outstretched -- shoulder and elbow both at 180degrees. 
 # ping is the distance detected by the ultrasonic sensor
@@ -182,13 +206,12 @@ def wrist_map(ultrasonic):
     return wrist_th
 
 
-
 if __name__ == '__main__':
     # implementing the DH table for the Arm.
     print("\n\n ======================Starting Kinematics.py Main FCN =======================")
     # *** need to be updated *** remeasure!
     ''' joints unused for now
-    base_j = joint(90  , 0 ,  0 , -30)
+    base_j = joint(90  , 0 ,  0 , )
     # from the base to the shoulder
     #   --shoulder servo angled forward -- to look horizontal
     shoulder_j = joint( -70, 0   , 0 , 45)
@@ -201,7 +224,8 @@ if __name__ == '__main__':
     #from wrist to hand
     hand_j = joint(0  , 0   , 0  , 90)
     '''
-
+ 
+    '''
     # Set y to negative idk, 5? tbd with measurments. and the x will be transformed to a y, computed, then transformed back to x.
     # x will be the ping sensor distance. detected. 
 
@@ -226,15 +250,16 @@ if __name__ == '__main__':
     print(f"Computed values inverse kinematics function:\ntheta1 = {th1}\ntheta2 = {th2}\n")
     print(f"Sanity Check! Computed xy values with forward kinematics based on inverse kinematics:\nx = {x_set}\ny = {y_set}\n")
 
+    # theta2 for wrist will be 90 + th2
+    wrist_angle = 90 + th2
+    '''
 
-    x1 = 65*np.cos(np.deg2rad(13))
-    x2 = 90*np.cos(np.deg2rad(-120))
+    wrist_map(9)
+
+    # x1 = 65*np.cos(np.deg2rad(13))
+    # x2 = 90*np.cos(np.deg2rad(-120))
     # print(f"horizontal distance from component 1 is: 65mm *cos(13) = {x1}")
     # print(f"horizonatl distance from component 2 is: 90mm *cos(-120) = {x2}")
     # print(f"total horizantl distance covered = sum: {x1+x2}")
-
-
-
-
 
 
