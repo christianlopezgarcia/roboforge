@@ -537,14 +537,14 @@ if __name__ == "__main__":
 
     update_time = 0.1 #seconds
     print_time = 1 #seconds
-    max_runtime = 2 #seconds
+    max_runtime = 20 #seconds
     
     time_start = time.time()
     time_last_print = time.time()
     time_last_update = time.time()
     #time.sleep(10)
 
-    motors.turn_and_move("Right", 5)
+    #motors.turn_and_move("Right", 2)
 
     while 1:
         #print(bno.get_angle())
@@ -565,11 +565,11 @@ if __name__ == "__main__":
         
         # # motors.move_LR("Right")
         
-        # if(time.time() - time_last_update > update_time):
-        #     motors.spin_motor(20)
-        #     motors.update_motors()
-        #     time_last_update = time.time()    
-        # #Print Info
+        if(time.time() - time_last_update > update_time):
+            motors.spin_motor(20)
+            motors.update_motors()
+            time_last_update = time.time()    
+        #Print Info
         # if(time.time() - time_last_print > print_time):
         #     motors.print_state_info()
         #     motors.print_pid_info()

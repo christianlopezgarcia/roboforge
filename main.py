@@ -195,7 +195,7 @@ def main():
         vision.PAUSE_PROCESSING = False
         while True:
             time.sleep(0.1)
-
+            targets = None
             with vision.TARGET_INFO_LOCK:
                 targets = dict(vision.GLOBAL_TARGET_INFO)
 
@@ -230,6 +230,7 @@ def main():
                 vision.PAUSE_PROCESSING = True
                 time.sleep(3)
                 approach_and_pickup(MINIMUM_BLOCK)
+                time.sleep(3)
                 vision.PAUSE_PROCESSING = False
 
             #     with vision.TARGET_INFO_LOCK:

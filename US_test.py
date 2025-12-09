@@ -22,7 +22,7 @@ if __name__ == '__main__':
     # start_thread(sample_rate, echo_pin2, trigger_pin2)
     try:
         while True:
-            time.sleep(1)
+            time.sleep(.5)
             # print(time.time())
             # Safely copy the shared target dictionary
             with ULTRASONIC_INFO_LOCK:

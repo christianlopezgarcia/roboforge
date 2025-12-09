@@ -53,9 +53,9 @@ class RobotArm:
         "8cm_closed":           {"base": 90, "shoulder": 180, "elbow": 80,  "wrist": 25,  "hand": CLOSED}, #solid
         "8cm_30r_closed":       {"base": 60, "shoulder": 180, "elbow": 80,  "wrist": 25,  "hand": CLOSED}, 
 
-        "10_cm":                {"base": 90,  "shoulder": 200, "elbow": 85, "wrist": 45, "hand": OPEN}, #solid
-        "10_cm_closed":         {"base": 90,  "shoulder": 200, "elbow": 85, "wrist": 45, "hand": CLOSED}, #solid
-        "10_cm_30r_closed":     {"base": 60,  "shoulder": 200, "elbow": 85, "wrist": 45, "hand": CLOSED}, #solid
+        "10_cm":                {"base": 90,  "shoulder": 200, "elbow": 90, "wrist": 50, "hand": OPEN}, #solid
+        "10_cm_closed":         {"base": 90,  "shoulder": 200, "elbow": 90, "wrist": 50, "hand": CLOSED}, #solid
+        "10_cm_30r_closed":     {"base": 60,  "shoulder": 200, "elbow": 90, "wrist": 50, "hand": CLOSED}, #solid
 
         
         "fold_over":        {"base": 90, "shoulder": 90, "elbow": 0,  "wrist": 90,  "hand": CLOSED},
@@ -76,7 +76,7 @@ class RobotArm:
     }
 
     MIN_PULSE = 500
-    MAX_PULSE = 3000
+    MAX_PULSE = 3015
     STEP = 2
     FAST_STEP = 2
     DELAY = 0.05
@@ -342,8 +342,9 @@ if __name__ == "__main__":
     time.sleep(0.5)
     arm.status()
 
-    ten_cm_pickup()
-    five_cm_pickup()
+    # ten_cm_pickup()
+    # five_cm_pickup()
+    # eight_cm_pickup()
     
     # print('\n------ reach_forward --------')
     # arm.move_to_pose("reach_forward")
@@ -431,7 +432,7 @@ if __name__ == "__main__":
     # arm.move_to_pose("default")
     # arm.status()
     # arm.set_all({"base": 90,  "shoulder": 50,  "elbow": 160,"wrist": 0,  "hand": 180})
-    arm.move_to_pose(name = "4_21_view",reverse = True)
-    arm.status()
+    # arm.move_to_pose(name = "4_21_view",reverse = True)
+    # arm.status()
 
 
