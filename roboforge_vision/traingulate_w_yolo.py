@@ -59,7 +59,7 @@ PAUSE_PROCESSING = False
 # -----------------------------------------------
 
 # ------------------------------
-# CAMERA THREAD CLASS (Unchanged)
+# CAMERA THREAD CLASS
 # ------------------------------
 class CameraThread:
     def __init__(self, cam_id, width, height, fps, fourcc):
@@ -97,7 +97,7 @@ class CameraThread:
         self.cap.release()
 
 # ------------------------------
-# TRIANGULATION UTILITIES (Unchanged, operates on PIXEL coordinates)
+# TRIANGULATION UTILITIES
 # ------------------------------
 def triangulate_from_pixel(x_left_px, y_left_px, x_right_px, y_right_px,
                              fx_px, baseline_m, cx_px, cy_px, eps=1e-6):
@@ -151,7 +151,7 @@ def undistort_pixel_coords(x_d, y_d, cx, cy, fx, k1):
     return x_u, y_u
 
 # ------------------------------
-# Helper for Display (Unchanged)
+# Helper for Display 
 # ------------------------------
 def frame_add_crosshairs(frame, x_c, y_c, size=15, color=(0,255,0), thickness=1):
     """Draws a crosshair at the specified pixel coordinates."""
